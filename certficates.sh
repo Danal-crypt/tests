@@ -75,7 +75,7 @@ for exclude_dir in "${excluded_dirs[@]}"; do
 done
 
 # Directories to search for certificates
-directories=("/opt/splunk*" "/opt/caspida/" "/opt/cribl/*")
+directories=("/opt/*")
 
 # Search for certificate files in the specified directories, excluding specified directories
 for dir in "${directories[@]}"; do

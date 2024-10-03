@@ -13,7 +13,7 @@ today=$(date +%s)
 thirty_days=$((30 * 24 * 60 * 60))
 
 # Directories to search for certificates and .conf files
-directories_to_scan=("/opt/*") # Modify as needed
+directories_to_scan=("/opt/*")
 
 # Directories to exclude from the search
 excluded_dirs=("/path/to/exclude1" "/path/to/exclude2") # Modify as needed
@@ -33,9 +33,11 @@ find_conf_references() {
     for dir in "${directories_to_scan[@]}"; do
         # Skip if directory doesn't exist
         if [[ ! -d "$dir" ]]; then
+            echo "Directory does not exist: $dir"
             continue
         fi
 
+        echo "Checking directory for .conf files: $dir"
         # Find all .conf files in the directory and search for references to the cert file
         conf_files=$(find "$dir" -type f -name "*.conf" 2>/dev/null | xargs grep -l "$cert_file" 2>/dev/null)
 
@@ -69,6 +71,8 @@ check_certificates() {
     local subject
     local san
     local referencing_conf_files
+
+    echo "Processing file: $cert_file"
 
     # Check if the file is a valid certificate
     if ! is_certificate "$cert_file"; then
@@ -134,8 +138,11 @@ done
 
 # Search for certificate files in the specified directories, excluding specified directories
 for dir in "${directories_to_scan[@]}"; do
+    echo "Checking directory: $dir"
+    
     # Skip directories that don't exist
     if [[ ! -d "$dir" ]]; then
+        echo "Directory does not exist: $dir"
         continue
     fi
 

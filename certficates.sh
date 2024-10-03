@@ -4,48 +4,42 @@
 today=$(date +%s)
 thirty_days=$((30 * 24 * 60 * 60))
 
+# Function to check if the file is a certificate or a key
+is_certificate() {
+    local file="$1"
+    openssl x509 -noout -in "$file" 2>/dev/null
+}
+
 # Function to check expiration date of a certificate and gather information
 check_certificates() {
     local cert_file="$1"
     local expiration_date
+    local not_before
     local expiration_in_seconds
     local time_until_expiration
     local status
-    local cert_type="unknown"
     local issuer
     local subject
-    local serial
-    local signature_algorithm
-    local public_key_info
-    local fingerprint
-    local key_usage
-    local ext_key_usage
+    local san
+
+    # Check if the file is a valid certificate
+    if ! is_certificate "$cert_file"; then
+        echo "host=$(hostname), cert_file=\"$cert_file\", status=invalid_or_key_file"
+        return
+    fi
 
     # Extract expiration date using openssl
     expiration_date=$(openssl x509 -enddate -noout -in "$cert_file" 2>/dev/null | sed 's/notAfter=//')
 
-    # Extract Key Usage and Extended Key Usage
-    key_usage=$(openssl x509 -in "$cert_file" -noout -text | grep -A 1 'Key Usage' | tail -1)
-    ext_key_usage=$(openssl x509 -in "$cert_file" -noout -text | grep -A 1 'Extended Key Usage' | tail -1)
+    # Extract the start date of the certificate
+    not_before=$(openssl x509 -startdate -noout -in "$cert_file" 2>/dev/null | sed 's/notBefore=//')
 
-    # Extract additional information
+    # Extract Subject Alternative Names (SAN)
+    san=$(openssl x509 -in "$cert_file" -noout -text | grep -A 1 "Subject Alternative Name" | tail -1 | tr -d ',')
+
+    # Extract issuer and subject information
     issuer=$(openssl x509 -in "$cert_file" -noout -issuer)
     subject=$(openssl x509 -in "$cert_file" -noout -subject)
-    serial=$(openssl x509 -in "$cert_file" -noout -serial)
-    signature_algorithm=$(openssl x509 -in "$cert_file" -noout -text | grep 'Signature Algorithm' | head -1)
-    public_key_info=$(openssl x509 -in "$cert_file" -noout -text | grep 'Public Key Algorithm' -A 10 | tr '\n' ' ')
-    fingerprint=$(openssl x509 -in "$cert_file" -noout -sha256 -fingerprint)
-
-    # Determine the certificate type based on key usage
-    if echo "$ext_key_usage" | grep -q 'TLS Web Server Authentication'; then
-        cert_type="server"
-    elif echo "$ext_key_usage" | grep -q 'TLS Web Client Authentication'; then
-        cert_type="client"
-    elif openssl x509 -in "$cert_file" -noout -issuer -subject | grep -q 'issuer=subject'; then
-        cert_type="root"
-    elif echo "$key_usage" | grep -q 'Certificate Sign'; then
-        cert_type="intermediate"
-    fi
 
     # Check if the certificate has a valid expiration date
     if [[ -n "$expiration_date" ]]; then
@@ -67,8 +61,8 @@ check_certificates() {
         status="invalid_certificate"
     fi
 
-    # Output key-value pairs for Splunk with all the gathered data
-    echo "host=$(hostname), cert_file=\"$cert_file\", expiration_date=\"$expiration_date\", cert_type=$cert_type, key_usage=\"$key_usage\", ext_key_usage=\"$ext_key_usage\", issuer=\"$issuer\", subject=\"$subject\", serial=\"$serial\", signature_algorithm=\"$signature_algorithm\", public_key_info=\"$public_key_info\", fingerprint=\"$fingerprint\", status=$status"
+    # Output key-value pairs for Splunk with the relevant fields
+    echo "host=$(hostname), cert_file=\"$cert_file\", issuer=\"$issuer\", subject=\"$subject\", san=\"$san\", not_before=\"$not_before\", expiration_date=\"$expiration_date\", status=$status"
 }
 
 # Array to hold directories to be excluded
@@ -81,11 +75,11 @@ for exclude_dir in "${excluded_dirs[@]}"; do
 done
 
 # Directories to search for certificates
-directories=("/opt/")
+directories=("/opt/splunk*" "/opt/caspida/" "/opt/cribl/*")
 
 # Search for certificate files in the specified directories, excluding specified directories
 for dir in "${directories[@]}"; do
-    find $dir "${exclude_conditions[@]}" -type f \( -name "*.pem" -o -name "*.crt" -o -name "*.cer" \) -print | while read cert_file; do
+    find $dir "${exclude_conditions[@]}" -type f \( -name "*.pem" -o -name "*.crt" -o -name "*.cer" -o -name "*.key" \) -print | while read cert_file; do
         check_certificates "$cert_file"
     done
 done

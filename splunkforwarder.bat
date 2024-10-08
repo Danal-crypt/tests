@@ -1,37 +1,50 @@
 #!/bin/bash
 
 # Variables
-SPLUNK_URL="https://download.splunk.com/products/universalforwarder/releases/9.3.1/linux/splunkforwarder-9.3.1-ae6821dc8e49-Linux-x86_64.tgz"
+SPLUNK_URL=""
 SPLUNK_DIR="/opt/SplunkForwarder"
 DEPLOYMENT_SERVER="<deployment-server>:<port>" # Replace with your actual deployment server and port
+SPLUNK_USER="splunkforwarder"
+SPLUNK_GROUP="splunkforwarder"
 
-# Step 1: Download Splunk Universal Forwarder
+# Step 1: Create splunkforwarder user and group
+echo "Creating user and group for Splunk..."
+groupadd -r $SPLUNK_GROUP
+useradd -r -g $SPLUNK_GROUP -d $SPLUNK_DIR -s /bin/bash $SPLUNK_USER
+
+# Step 2: Download Splunk Universal Forwarder
 echo "Downloading Splunk Universal Forwarder..."
 wget -O /tmp/splunkforwarder.tgz $SPLUNK_URL
 
-# Step 2: Create installation directory and extract Splunk
+# Step 3: Create installation directory and extract Splunk
 echo "Extracting Splunk to $SPLUNK_DIR..."
 mkdir -p $SPLUNK_DIR
 tar -xvf /tmp/splunkforwarder.tgz -C $SPLUNK_DIR --strip-components=1
 
-# Step 3: Disable port 8089 (management port)
+# Step 4: Set ownership of Splunk installation directory
+echo "Setting ownership of Splunk directory..."
+chown -R $SPLUNK_USER:$SPLUNK_GROUP $SPLUNK_DIR
+
+# Step 5: Disable port 8089 (management port)
 echo "Disabling management port (8089)..."
-$SPLUNK_DIR/bin/splunk set splunkd-port 0 --accept-license --answer-yes --no-prompt
+sudo -u $SPLUNK_USER $SPLUNK_DIR/bin/splunk set splunkd-port 0 --accept-license --answer-yes --no-prompt
 
-# Step 4: Set deployment server
+# Step 6: Set deployment server
 echo "Configuring deployment server..."
-$SPLUNK_DIR/bin/splunk set deploy-poll $DEPLOYMENT_SERVER --accept-license --answer-yes --no-prompt
+sudo -u $SPLUNK_USER $SPLUNK_DIR/bin/splunk set deploy-poll $DEPLOYMENT_SERVER --accept-license --answer-yes --no-prompt
 
-# Step 5: Set permissions for cap_dac_read_search
-echo "Setting capabilities for Splunk Forwarder..."
-setcap 'cap_dac_read_search=ep' $SPLUNK_DIR/bin/splunk
+# Step 7: Enable boot-start with systemd and set AmbientCapabilities
+echo "Enabling boot-start for Splunk Forwarder with systemd..."
+$SPLUNK_DIR/bin/splunk enable boot-start -user $SPLUNK_USER --answer-yes --no-prompt --accept-license
 
-# Step 6: Start Splunk Forwarder and enable at boot
-echo "Starting Splunk Forwarder..."
-$SPLUNK_DIR/bin/splunk start --accept-license --answer-yes --no-prompt
+# Add AmbientCapabilities to systemd service file
+echo "Adding AmbientCapabilities to Splunk systemd service..."
+sed -i '/^\[Service\]/a AmbientCapabilities=CAP_DAC_READ_SEARCH' /etc/systemd/system/splunkforwarder.service
 
-echo "Enabling Splunk Forwarder to start at boot..."
-$SPLUNK_DIR/bin/splunk enable boot-start
+# Step 8: Start the Splunk Forwarder service
+echo "Starting Splunk Forwarder service..."
+systemctl daemon-reload
+systemctl start splunkforwarder
 
 # Cleanup
 rm /tmp/splunkforwarder.tgz

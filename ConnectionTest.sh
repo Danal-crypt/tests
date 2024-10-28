@@ -43,7 +43,6 @@ echo -e "$OUTPUT"
 
 
 
-index=temp sourcetype=connection_check
 | rex max_match=0 "(?<host_status>connected_[^=]+=(Yes|No))"
 | mvexpand host_status
 | rex field=host_status "(?<hostname>connected_[^=]+)=(?<status>(Yes|No))"
@@ -55,6 +54,6 @@ index=temp sourcetype=connection_check
 | eval hostname_details = replace(hostname_details, "details_", "")
 
 | where hostname=hostname_details
-| stats values(status) as Status, values(details) as Details by hostname
-| eval ConnectionStatus = if(Status="Yes", "Connected", "Not Connected")
-| table hostname ConnectionStatus Details
+| stats values(status) as Status, values(details) as Details by host, hostname
+| eval ConnectionStatus = if(like(details, "%Operation not permitted%"), "Ping not permitted", if(Status="Yes", "Connected", "Not Connected"))
+| table host hostname ConnectionStatus Details

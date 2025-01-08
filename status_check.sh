@@ -1,24 +1,17 @@
 #!/bin/bash
 
+# Define configurations for each hostname
+declare -A host_configs=(
+    [host1]="services=splunk,caspida ports=8089,9997,8443 partitions=/,/var"
+    [host2]="services=cribl ports=514 partitions=/,/home"
+    [host3]="services=splunk ports=8089 partitions=/"
+)
+
 # Define the paths to the services and their commands
 declare -A service_commands=(
     [splunk]="/opt/splunk/bin/splunk status"
     [caspida]="/app/caspida/bin/Caspida status"
     [cribl]="/opt/cribl/bin/cribl status"
-)
-
-# Define the mapping of hostnames to expected services
-declare -A host_services=(
-    [host1]="splunk caspida"
-    [host2]="cribl"
-    [host3]="splunk"
-)
-
-# Define ports associated with services
-declare -A service_ports=(
-    [splunk]="8089 9997"
-    [cribl]="514"
-    [caspida]="8443"
 )
 
 # Define log file locations for services
@@ -29,79 +22,110 @@ declare -A service_logs=(
 )
 
 # Define the output file
-output_file="/var/log/service_status.log"
+output_file="/var/log/service_status.json"
 
 # Get the current timestamp and hostname
 entry_timestamp=$(date "+%Y-%m-%d %H:%M:%S")
 hostname=$(hostname -s) # Short hostname
 
-# Collect general system information
-system_info="System uptime: $(uptime -p | sed 's/^up //')
-Disk usage on /: $(df -h / | awk 'NR==2 {print $5}')
-Memory usage: $(free -m | awk 'NR==2{printf "Used: %sMB, Free: %sMB", $3, $4}')
-CPU load: $(top -bn1 | grep "load average" | awk '{printf "1-min: %s, 5-min: %s, 15-min: %s", $10, $11, $12}' | sed 's/,//g')"
-
-# Collect the last 5 package updates
-last_updates=$(rpm -qa --last | head -n 5 | awk '{printf "%s %s %s\n", $1, $2, $3}')
-
-# Prepare service-specific information
-service_info=""
-expected_services=${host_services[$hostname]}
-
-if [ -z "$expected_services" ]; then
-    service_info="No services configured for hostname $hostname."
-else
-    for service in $expected_services; do
-        command=${service_commands[$service]}
-        if [ -x "$(dirname $command)" ]; then
-            status_output=$($command 2>&1)
-            status_code=$?
-            service_info+="Service: $service
-    Status Code: $status_code
-    Output: $status_output
-"
-        else
-            service_info+="Service: $service
-    Status: not_installed_or_not_accessible
-"
-        fi
-
-        # Check open ports for the service
-        ports=${service_ports[$service]}
-        if [ -n "$ports" ]; then
-            for port in $ports; do
-                port_status=$(netstat -tuln | grep ":$port" >/dev/null && echo "open" || echo "closed")
-                service_info+="    Port $port: $port_status
-"
-            done
-        fi
-
-        # Append last 5 lines of service-specific logs
-        log_file=${service_logs[$service]}
-        if [ -f "$log_file" ]; then
-            service_info+="    Last 5 lines of log:
-$(tail -n 5 "$log_file" | sed 's/^/        /')
-"
-        else
-            service_info+="    Log file not found: $log_file
-"
-        fi
-    done
+# Retrieve configuration for the current host
+config=${host_configs[$hostname]}
+if [ -z "$config" ]; then
+    echo "{\"timestamp\": \"$entry_timestamp\", \"hostname\": \"$hostname\", \"error\": \"No configuration found for this host.\"}" > $output_file
+    exit 1
 fi
 
-# Combine all output into a single entry
-output="Timestamp: $entry_timestamp
-Hostname: $hostname
+# Parse the configuration
+services=$(echo "$config" | grep -oP 'services=\K[^ ]+')
+ports=$(echo "$config" | grep -oP 'ports=\K[^ ]+')
+partitions=$(echo "$config" | grep -oP 'partitions=\K[^ ]+')
 
-System Information:
-$system_info
+# Collect general system information
+partition_info="["
+if [ -n "$partitions" ]; then
+    for partition in $(echo "$partitions" | tr ',' ' '); do
+        usage=$(df -h "$partition" | awk 'NR==2 {print $5}')
+        partition_info+="{\"partition\": \"$partition\", \"usage\": \"$usage\"},"
+    done
+    partition_info="${partition_info%,}]"
+else
+    partition_info="[]"
+fi
 
-Last 5 Package Updates:
-$last_updates
+system_info=$(cat <<EOF
+{
+    "uptime": "$(uptime -p | sed 's/^up //')",
+    "partitions": $partition_info
+}
+EOF
+)
 
-Service Information:
-$service_info
-"
+# Collect the last 5 package updates
+last_updates=$(rpm -qa --last | head -n 5 | awk '{printf "{\"package\":\"%s\", \"date\":\"%s %s\"},", $1, $2, $3}')
+last_updates="[${last_updates%,}]"
 
-# Write the output to the log file
-echo "$output" >> $output_file
+# Prepare service-specific information
+service_info="["
+if [ -n "$services" ]; then
+    for service in $(echo "$services" | tr ',' ' '); do
+        command=${service_commands[$service]}
+        if [ -x "$(command -v ${command%% *})" ]; then
+            status_output=$($command 2>&1)
+            status_code=$?
+            log_file=${service_logs[$service]}
+            if [ -f "$log_file" ]; then
+                service_log=$(tail -n 10 "$log_file" | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}')
+            else
+                service_log="Log file not found: $log_file"
+            fi
+            service_info+=$(cat <<EOF
+{
+    "service": "$service",
+    "status_code": $status_code,
+    "output": "$(echo $status_output | sed 's/"/\\"/g')",
+    "log": "$service_log"
+},
+EOF
+)
+        else
+            service_info+=$(cat <<EOF
+{
+    "service": "$service",
+    "status": "not_installed_or_not_accessible"
+},
+EOF
+)
+        fi
+    done
+    service_info="${service_info%,}]"
+else
+    service_info="[]"
+fi
+
+# Prepare port-specific information
+port_info="["
+if [ -n "$ports" ]; then
+    for port in $(echo "$ports" | tr ',' ' '); do
+        port_status=$(netstat -tuln | grep ":$port" >/dev/null && echo "open" || echo "closed")
+        port_info+="{\"port\": \"$port\", \"status\": \"$port_status\"},"
+    done
+    port_info="${port_info%,}]"
+else
+    port_info="[]"
+fi
+
+# Combine all output into a single JSON object
+output=$(cat <<EOF
+{
+    "timestamp": "$entry_timestamp",
+    "hostname": "$hostname",
+    "system_info": $system_info,
+    "last_updates": $last_updates,
+    "services": $service_info,
+    "ports": $port_info
+}
+EOF
+)
+
+# Write the output to the JSON file
+echo "$output" > $output_file

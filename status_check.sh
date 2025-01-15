@@ -48,12 +48,12 @@ partition_info="["
 if [ -n "$partitions" ]; then
     for partition in $(echo "$partitions" | tr ',' ' '); do
         echo "Processing partition: $partition" >&2
-        partition_data=$(timeout 5 df -h "$partition" | awk 'NR==2 {printf "{\"size\":\"%s\", \"used\":\"%s\", \"available\":\"%s\", \"used_percentage\":\"%s\"}", $2, $3, $4, $5}')
-        if [ -z "$partition_data" ]; then
-            echo "Failed to process partition: $partition" >&2
-            continue
+        partition_data=$(df -h "$partition" 2>/dev/null | awk 'NR==2 {printf "\"size\":\"%s\", \"used\":\"%s\", \"available\":\"%s\", \"used_percentage\":\"%s\"", $2, $3, $4, $5}')
+        if [ -n "$partition_data" ]; then
+            partition_info+="{\"partition\": \"$partition\", $partition_data},"
+        else
+            echo "Partition data not found for: $partition" >&2
         fi
-        partition_info+="{\"partition\": \"$partition\", $partition_data},"
     done
     partition_info="${partition_info%,}]"
 else
@@ -69,7 +69,7 @@ EOF
 )
 
 # Collect the last 5 package updates
-last_updates=$(rpm -qa --last | head -n 5 | awk '{printf "{\"package\":\"%s\", \"date\":\"%s %s\"},", $1, $2, $3}')
+last_updates=$(rpm -qa --last | head -n 5 | awk '{printf "{\"package\":\"%s\", \"date\":\"%s %s %s %s\"},", $1, $2, $3, $4, $5}')
 last_updates="[${last_updates%,}]"
 
 # Prepare service-specific information

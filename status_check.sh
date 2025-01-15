@@ -24,6 +24,9 @@ declare -A service_logs=(
 # Define the output file
 output_file="/var/log/service_status.json"
 
+# Ensure the output directory exists
+mkdir -p "$(dirname "$output_file")"
+
 # Get the current timestamp and hostname
 entry_timestamp=$(date "+%Y-%m-%d %H:%M:%S")
 hostname=$(hostname -s) # Short hostname
@@ -31,7 +34,7 @@ hostname=$(hostname -s) # Short hostname
 # Retrieve configuration for the current host
 config=${host_configs[$hostname]}
 if [ -z "$config" ]; then
-    echo "{\"timestamp\": \"$entry_timestamp\", \"hostname\": \"$hostname\", \"error\": \"No configuration found for this host.\"}" > $output_file
+    echo "{\"timestamp\": \"$entry_timestamp\", \"hostname\": \"$hostname\", \"error\": \"No configuration found for this host.\"}" > "$output_file"
     exit 1
 fi
 
@@ -40,12 +43,17 @@ services=$(echo "$config" | grep -oP 'services=\K[^ ]+')
 ports=$(echo "$config" | grep -oP 'ports=\K[^ ]+')
 partitions=$(echo "$config" | grep -oP 'partitions=\K[^ ]+')
 
-# Collect general system information
+# Collect partition information
 partition_info="["
 if [ -n "$partitions" ]; then
     for partition in $(echo "$partitions" | tr ',' ' '); do
-        usage=$(df -h "$partition" | awk 'NR==2 {print $5}')
-        partition_info+="{\"partition\": \"$partition\", \"usage\": \"$usage\"},"
+        echo "Processing partition: $partition" >&2
+        partition_data=$(timeout 5 df -h "$partition" | awk 'NR==2 {printf "{\"size\":\"%s\", \"used\":\"%s\", \"available\":\"%s\", \"used_percentage\":\"%s\"}", $2, $3, $4, $5}')
+        if [ -z "$partition_data" ]; then
+            echo "Failed to process partition: $partition" >&2
+            continue
+        fi
+        partition_info+="{\"partition\": \"$partition\", $partition_data},"
     done
     partition_info="${partition_info%,}]"
 else
@@ -68,6 +76,7 @@ last_updates="[${last_updates%,}]"
 service_info="["
 if [ -n "$services" ]; then
     for service in $(echo "$services" | tr ',' ' '); do
+        echo "Processing service: $service" >&2
         command=${service_commands[$service]}
         if [ -x "$(command -v ${command%% *})" ]; then
             status_output=$($command 2>&1)
@@ -88,6 +97,7 @@ if [ -n "$services" ]; then
 EOF
 )
         else
+            echo "Command not found or not executable: $command" >&2
             service_info+=$(cat <<EOF
 {
     "service": "$service",
@@ -106,7 +116,8 @@ fi
 port_info="["
 if [ -n "$ports" ]; then
     for port in $(echo "$ports" | tr ',' ' '); do
-        port_status=$(netstat -tuln | grep ":$port" >/dev/null && echo "open" || echo "closed")
+        echo "Processing port: $port" >&2
+        port_status=$(timeout 5 netstat -tuln | grep ":$port" >/dev/null && echo "open" || echo "closed")
         port_info+="{\"port\": \"$port\", \"status\": \"$port_status\"},"
     done
     port_info="${port_info%,}]"
@@ -128,4 +139,6 @@ EOF
 )
 
 # Write the output to the JSON file
-echo "$output" > $output_file
+echo "$output" > "$output_file"
+
+echo "Script completed successfully. Output written to $output_file" >&2

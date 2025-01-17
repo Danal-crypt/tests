@@ -1,14 +1,13 @@
-(index=_audit (user=user savedsearch_name=* info=completed search_id="*scheduler*"))
-OR (index=_audit action=artifact_deleted sid="*scheduler*")
+index=_audit (user=user (action=search info=completed) OR action=artifact_deleted sid="*scheduler*")
+| eval action=if(action="search" AND info="completed", "completed", action)
 | eval search_id=coalesce(search_id, sid)
 | where isnotnull(search_id)
 | stats 
     values(_time) as all_times 
     values(savedsearch_name) as savedsearch_name 
     values(user) as user 
-    values(info) as all_info 
     values(action) as all_actions by search_id
-| eval search_time=if(mvfind(all_info, "completed") >= 0, mvindex(all_times, mvfind(all_info, "completed")), null())
+| eval search_time=if(mvfind(all_actions, "completed") >= 0, mvindex(all_times, mvfind(all_actions, "completed")), null())
 | eval delete_time=if(mvfind(all_actions, "artifact_deleted") >= 0, mvindex(all_times, mvfind(all_actions, "artifact_deleted")), null())
 | eval search_time=strftime(search_time, "%Y-%m-%d %H:%M:%S")
 | eval delete_time=strftime(delete_time, "%Y-%m-%d %H:%M:%S")

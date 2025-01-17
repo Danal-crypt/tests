@@ -8,8 +8,11 @@ OR (index=_audit action=artifact_deleted sid=*)
     values(user) as user 
     values(info) as all_info 
     values(action) as all_actions by search_id
-| eval search_time=if(mvfind(all_info, "completed") >= 0, mvindex(all_times, mvfind(all_info, "completed")), null())
-| eval delete_time=if(mvfind(all_actions, "artifact_deleted") >= 0, mvindex(all_times, mvfind(all_actions, "artifact_deleted")), null())
+| eval has_completed=if(mvfind(all_info, "completed") >= 0, 1, 0)
+| eval has_deleted=if(mvfind(all_actions, "artifact_deleted") >= 0, 1, 0)
+| where has_completed=1 AND has_deleted=1
+| eval search_time=mvindex(all_times, mvfind(all_info, "completed"))
+| eval delete_time=mvindex(all_times, mvfind(all_actions, "artifact_deleted"))
 | eval search_time=strftime(search_time, "%Y-%m-%d %H:%M:%S")
 | eval delete_time=strftime(delete_time, "%Y-%m-%d %H:%M:%S")
 | table search_id user search_time savedsearch_name delete_time

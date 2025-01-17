@@ -8,11 +8,9 @@ OR (index=_audit action=artifact_deleted sid="*scheduler*")
     values(user) as user 
     values(info) as all_info 
     values(action) as all_actions by search_id
-| eval has_completed=if(mvfind(all_info, "completed") >= 0, 1, 0)
-| eval has_deleted=if(mvfind(all_actions, "artifact_deleted") >= 0, 1, 0)
-| where has_completed=1 AND has_deleted=1
-| eval search_time=if(has_completed=1, mvindex(all_times, mvfind(all_info, "completed")), null())
-| eval delete_time=if(has_deleted=1, mvindex(all_times, mvfind(all_actions, "artifact_deleted")), null())
+| eval search_time=if(mvfind(all_info, "completed") >= 0, mvindex(all_times, mvfind(all_info, "completed")), null())
+| eval delete_time=if(mvfind(all_actions, "artifact_deleted") >= 0, mvindex(all_times, mvfind(all_actions, "artifact_deleted")), null())
 | eval search_time=strftime(search_time, "%Y-%m-%d %H:%M:%S")
 | eval delete_time=strftime(delete_time, "%Y-%m-%d %H:%M:%S")
+| where isnotnull(search_time) AND isnotnull(delete_time)
 | table search_id user search_time savedsearch_name delete_time

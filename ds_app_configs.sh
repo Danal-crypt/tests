@@ -3,15 +3,19 @@
 # Define the deployment-apps directory
 DEPLOYMENT_APPS_DIR="$SPLUNK_HOME/etc/deployment-apps"
 
-# Check if the user has provided a configuration file to search for
+# Check if the user has provided the configuration file to search for
 if [[ -z "$1" ]]; then
-    echo "Usage: $0 <config_file_name_without_extension>"
-    echo "Example: $0 outputs (to search for outputs.conf)"
+    echo "Usage: $0 <config_file_name_without_extension> [app_keyword]"
+    echo "Example: $0 outputs (to search all apps for outputs.conf)"
+    echo "Example: $0 outputs ueba (to search for outputs.conf in apps containing 'ueba')"
     exit 1
 fi
 
 # Define the configuration file to search for
 CONFIG_FILE="$1.conf"
+
+# Optional keyword to filter apps
+APP_KEYWORD="$2"
 
 # Check if the deployment-apps directory exists
 if [[ ! -d "$DEPLOYMENT_APPS_DIR" ]]; then
@@ -20,10 +24,20 @@ if [[ ! -d "$DEPLOYMENT_APPS_DIR" ]]; then
 fi
 
 # Loop through each app in the deployment-apps directory
-echo "Searching for '$CONFIG_FILE' in all apps under $DEPLOYMENT_APPS_DIR:"
+echo "Searching for '$CONFIG_FILE' in apps under $DEPLOYMENT_APPS_DIR:"
+if [[ -n "$APP_KEYWORD" ]]; then
+    echo "Filtering apps by keyword: $APP_KEYWORD"
+fi
+
 for app_dir in "$DEPLOYMENT_APPS_DIR"/*; do
     # Skip if not a directory
     if [[ ! -d "$app_dir" ]]; then
+        continue
+    fi
+
+    # Check if the app directory matches the optional keyword (if provided)
+    app_name=$(basename "$app_dir")
+    if [[ -n "$APP_KEYWORD" && "$app_name" != *"$APP_KEYWORD"* ]]; then
         continue
     fi
 

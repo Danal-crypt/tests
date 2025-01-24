@@ -14,7 +14,7 @@ LOCAL_SOURCE_DIR="/path/to/local/source"
 REMOTE_DEST_DIR="/path/to/remote/destination"
 
 # rsync options (e.g., -avz for archive, verbose, compress)
-RSYNC_OPTIONS="-avz --exclude='*.tmp'"
+RSYNC_OPTIONS="-avz --stats --exclude='*.tmp'"
 
 # Username for connecting to the remote servers
 REMOTE_USER="splunk"
@@ -53,7 +53,7 @@ while IFS= read -r hostname; do
     fi
 
     # Step 2: Perform rsync dry-run to display what will be transferred
-    echo "Running rsync dry-run for $hostname..."
+    echo "Running rsync dry-run for $hostname with stats..."
     sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS --dry-run \
         -e "ssh -o StrictHostKeyChecking=no" \
         "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
@@ -63,16 +63,15 @@ while IFS= read -r hostname; do
     fi
     echo "[SUCCESS] Dry-run completed for $hostname."
 
-    # Step 3: Display completion of all pre-checks and ask whether to proceed
+    # Step 3: Generate a random 4-digit number and prompt user for confirmation
+    RANDOM_CODE=$((RANDOM % 9000 + 1000)) # Generate a 4-digit random number
+    echo "If the above information looks correct, input the following code to proceed: $RANDOM_CODE"
     while true; do
-        echo -n "Do you want to proceed with the actual rsync transfer for $hostname? (yes/no): "
+        echo -n "Enter the code to confirm the transfer for $hostname: "
         read -r user_input
 
-        # Normalize user input (lowercase and trim whitespace)
-        user_input=$(echo "$user_input" | tr '[:upper:]' '[:lower:]' | xargs)
-
-        if [[ "$user_input" == "yes" || "$user_input" == "y" ]]; then
-            echo "Proceeding with actual rsync transfer for $hostname..."
+        if [[ "$user_input" == "$RANDOM_CODE" ]]; then
+            echo "Code verified. Proceeding with actual rsync transfer for $hostname..."
             sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS \
                 -e "ssh -o StrictHostKeyChecking=no" \
                 "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
@@ -82,11 +81,8 @@ while IFS= read -r hostname; do
                 echo "[FAILURE] Rsync transfer failed for $hostname."
             fi
             break
-        elif [[ "$user_input" == "no" || "$user_input" == "n" ]]; then
-            echo "Skipping rsync transfer for $hostname."
-            break
         else
-            echo "Invalid input. Please enter 'yes' or 'no'."
+            echo "Invalid code. Please try again."
         fi
     done
 

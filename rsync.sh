@@ -70,6 +70,9 @@ while IFS= read -r hostname; do
         echo -n "Enter the code to confirm the transfer for $hostname: "
         read -r user_input
 
+        # Echo what the user entered
+        echo "You entered: $user_input"
+
         if [[ "$user_input" == "$RANDOM_CODE" ]]; then
             echo "Code verified. Proceeding with actual rsync transfer for $hostname..."
             sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS \

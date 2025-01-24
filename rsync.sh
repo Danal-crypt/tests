@@ -51,20 +51,23 @@ while IFS= read -r hostname; do
 
     # Perform rsync dry-run to display what will be transferred
     echo "Running rsync dry-run for $hostname..."
-    DRY_RUN_OUTPUT=$(sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS --dry-run "${REMOTE_USER}@${hostname}:${REMOTE_DIR}/" "$LOCAL_DEST_DIR/" 2>&1)
-    echo "$DRY_RUN_OUTPUT"
+    sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS --dry-run "${REMOTE_USER}@${hostname}:${REMOTE_DIR}/" "$LOCAL_DEST_DIR/"
+    if [ $? -ne 0 ]; then
+        echo "[FAILURE] Rsync dry-run failed for $hostname. Skipping..."
+        continue
+    fi
 
     # Ask the user whether to proceed with the actual rsync transfer
     while true; do
         read -p "Do you want to proceed with the actual rsync transfer for $hostname? (yes/no): " user_input
-        case $user_input in
+        case "$user_input" in
             yes|y)
                 echo "Proceeding with actual rsync transfer for $hostname..."
-                RSYNC_OUTPUT=$(sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS "${REMOTE_USER}@${hostname}:${REMOTE_DIR}/" "$LOCAL_DEST_DIR/" 2>&1)
+                sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS "${REMOTE_USER}@${hostname}:${REMOTE_DIR}/" "$LOCAL_DEST_DIR/"
                 if [ $? -eq 0 ]; then
                     echo "[SUCCESS] Rsync transfer completed for $hostname"
                 else
-                    echo "[FAILURE] Rsync transfer failed for $hostname. Output: $RSYNC_OUTPUT"
+                    echo "[FAILURE] Rsync transfer failed for $hostname."
                 fi
                 break
                 ;;
@@ -73,7 +76,7 @@ while IFS= read -r hostname; do
                 break
                 ;;
             *)
-                echo "Please enter 'yes' or 'no'."
+                echo "Invalid input. Please enter 'yes' or 'no'."
                 ;;
         esac
     done

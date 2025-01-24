@@ -42,7 +42,7 @@ while IFS= read -r hostname; do
 
     echo "Processing hostname: $hostname"
 
-    # Fetch the password for the current hostname
+    # Step 1: Fetch the password for the current hostname
     PASSWORD_OUTPUT=$(/opt/password/GetPassword object="${hostname}-splunk" -password 2>&1)
     if [ $? -eq 0 ]; then
         echo "[SUCCESS] Obtained password for $hostname"
@@ -52,20 +52,20 @@ while IFS= read -r hostname; do
         continue
     fi
 
-    # Perform rsync dry-run to display what will be transferred
+    # Step 2: Perform rsync dry-run to display what will be transferred
     echo "Running rsync dry-run for $hostname..."
     sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS --dry-run \
         -e "ssh -o StrictHostKeyChecking=no" \
-        "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/" > /dev/null 2>&1
+        "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
     if [ $? -ne 0 ]; then
-        echo "[FAILURE] Rsync dry-run failed for $hostname. Skipping..."
+        echo "[FAILURE] Rsync dry-run failed for $hostname."
         continue
     fi
+    echo "[SUCCESS] Dry-run completed for $hostname."
 
-    # Ask the user whether to proceed with the actual rsync transfer
+    # Step 3: Display completion of all pre-checks and ask whether to proceed
     while true; do
-        # Ensure no background process output interferes with the prompt
-        echo -n "Do you want to proceed with the actual rsync transfer for $hostname? (yes/no): " >&2
+        echo -n "Do you want to proceed with the actual rsync transfer for $hostname? (yes/no): "
         read -r user_input
 
         # Normalize user input (lowercase and trim whitespace)
@@ -77,7 +77,7 @@ while IFS= read -r hostname; do
                 -e "ssh -o StrictHostKeyChecking=no" \
                 "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
             if [ $? -eq 0 ]; then
-                echo "[SUCCESS] Rsync transfer completed for $hostname"
+                echo "[SUCCESS] Rsync transfer completed for $hostname."
             else
                 echo "[FAILURE] Rsync transfer failed for $hostname."
             fi

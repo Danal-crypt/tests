@@ -4,19 +4,10 @@
 # Configurable Variables
 # ------------------------
 
-# Path to the file containing the list of hostnames
 HOST_FILE="hosts.txt"
-
-# Local source directory (must exist on the local machine)
 LOCAL_SOURCE_DIR="/path/to/local/source"
-
-# Remote destination directory
 REMOTE_DEST_DIR="/path/to/remote/destination"
-
-# rsync options (e.g., -avz for archive, verbose, compress)
 RSYNC_OPTIONS="-avz --stats --exclude='*.tmp'"
-
-# Username for connecting to the remote servers
 REMOTE_USER="splunk"
 
 # ------------------------
@@ -35,11 +26,8 @@ if [[ ! -d "$LOCAL_SOURCE_DIR" ]]; then
     exit 1
 fi
 
-# Process each hostname in the host file
 while IFS= read -r hostname; do
-    # Skip empty lines or lines with only whitespace
     [[ -z "$hostname" ]] && continue
-
     echo "Processing hostname: $hostname"
 
     # Step 1: Fetch the password for the current hostname
@@ -48,7 +36,7 @@ while IFS= read -r hostname; do
         echo "[SUCCESS] Obtained password for $hostname"
         PASSWORD=$PASSWORD_OUTPUT
     else
-        echo "[FAILURE] Could not obtain password for $hostname. Output: $PASSWORD_OUTPUT"
+        echo "[FAILURE] Could not obtain password for $hostname."
         continue
     fi
 
@@ -64,35 +52,33 @@ while IFS= read -r hostname; do
     echo "[SUCCESS] Dry-run completed for $hostname."
 
     # Step 3: Generate a random 4-digit number and prompt user for confirmation
-    RANDOM_CODE=$((RANDOM % 9000 + 1000)) # Generate a 4-digit random number
+    RANDOM_CODE=$((RANDOM % 9000 + 1000))
     echo "If the above information looks correct, input the following code to proceed: $RANDOM_CODE"
     while true; do
-        # Prompt user and read input
-        echo -n "Enter the code to confirm the transfer for $hostname: "
-        read -r user_input
+        # Use /dev/tty to ensure proper user input handling
+        echo -n "Enter the code to confirm the transfer for $hostname: " > /dev/tty
+        read -r user_input < /dev/tty
 
-        # Ensure input is not empty
         if [[ -z "$user_input" ]]; then
-            echo "No input detected. Please enter the code."
+            echo "No input detected. Please enter the code." > /dev/tty
             continue
         fi
 
-        # Echo what the user entered
-        echo "You entered: $user_input"
+        echo "You entered: $user_input" > /dev/tty
 
         if [[ "$user_input" == "$RANDOM_CODE" ]]; then
-            echo "Code verified. Proceeding with actual rsync transfer for $hostname..."
+            echo "Code verified. Proceeding with actual rsync transfer for $hostname..." > /dev/tty
             sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS \
                 -e "ssh -o StrictHostKeyChecking=no" \
                 "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
             if [ $? -eq 0 ]; then
-                echo "[SUCCESS] Rsync transfer completed for $hostname."
+                echo "[SUCCESS] Rsync transfer completed for $hostname." > /dev/tty
             else
-                echo "[FAILURE] Rsync transfer failed for $hostname."
+                echo "[FAILURE] Rsync transfer failed for $hostname." > /dev/tty
             fi
             break
         else
-            echo "Invalid code. Please try again."
+            echo "Invalid code. Please try again." > /dev/tty
         fi
     done
 

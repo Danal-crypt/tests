@@ -54,7 +54,9 @@ while IFS= read -r hostname; do
 
     # Perform rsync dry-run to display what will be transferred
     echo "Running rsync dry-run for $hostname..."
-    sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS --dry-run "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
+    sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS --dry-run \
+        -e "ssh -o StrictHostKeyChecking=no" \
+        "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
     if [ $? -ne 0 ]; then
         echo "[FAILURE] Rsync dry-run failed for $hostname. Skipping..."
         continue
@@ -66,7 +68,9 @@ while IFS= read -r hostname; do
         user_input=$(echo "$user_input" | tr '[:upper:]' '[:lower:]' | xargs) # Normalize input (lowercase + trim whitespace)
         if [[ "$user_input" == "yes" || "$user_input" == "y" ]]; then
             echo "Proceeding with actual rsync transfer for $hostname..."
-            sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
+            sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS \
+                -e "ssh -o StrictHostKeyChecking=no" \
+                "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
             if [ $? -eq 0 ]; then
                 echo "[SUCCESS] Rsync transfer completed for $hostname"
             else

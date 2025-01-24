@@ -65,24 +65,27 @@ while IFS= read -r hostname; do
     # Ask the user whether to proceed with the actual rsync transfer
     while true; do
         read -rp "Do you want to proceed with the actual rsync transfer for $hostname? (yes/no): " user_input
-        user_input=$(echo "$user_input" | tr '[:upper:]' '[:lower:]' | xargs) # Normalize input (lowercase + trim whitespace)
-        if [[ "$user_input" == "yes" || "$user_input" == "y" ]]; then
-            echo "Proceeding with actual rsync transfer for $hostname..."
-            sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS \
-                -e "ssh -o StrictHostKeyChecking=no" \
-                "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
-            if [ $? -eq 0 ]; then
-                echo "[SUCCESS] Rsync transfer completed for $hostname"
-            else
-                echo "[FAILURE] Rsync transfer failed for $hostname."
-            fi
-            break
-        elif [[ "$user_input" == "no" || "$user_input" == "n" ]]; then
-            echo "Skipping rsync transfer for $hostname."
-            break
-        else
-            echo "Invalid input. Please enter 'yes' or 'no'."
-        fi
+        case "${user_input,,}" in
+            yes|y)
+                echo "Proceeding with actual rsync transfer for $hostname..."
+                sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS \
+                    -e "ssh -o StrictHostKeyChecking=no" \
+                    "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
+                if [ $? -eq 0 ]; then
+                    echo "[SUCCESS] Rsync transfer completed for $hostname"
+                else
+                    echo "[FAILURE] Rsync transfer failed for $hostname."
+                fi
+                break
+                ;;
+            no|n)
+                echo "Skipping rsync transfer for $hostname."
+                break
+                ;;
+            *)
+                echo "Invalid input. Please enter 'yes' or 'no'."
+                ;;
+        esac
     done
 
 done < "$HOST_FILE"

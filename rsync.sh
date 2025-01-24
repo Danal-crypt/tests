@@ -64,9 +64,12 @@ while IFS= read -r hostname; do
 
     # Ask the user whether to proceed with the actual rsync transfer
     while true; do
+        # Prompt user and wait for input
         echo -n "Do you want to proceed with the actual rsync transfer for $hostname? (yes/no): "
-        read user_input
-        user_input=$(echo "$user_input" | tr '[:upper:]' '[:lower:]' | xargs) # Normalize input (lowercase + trim whitespace)
+        read -r user_input
+
+        # Normalize user input (lowercase and trim whitespace)
+        user_input=$(echo "$user_input" | tr '[:upper:]' '[:lower:]' | xargs)
 
         if [[ "$user_input" == "yes" || "$user_input" == "y" ]]; then
             echo "Proceeding with actual rsync transfer for $hostname..."

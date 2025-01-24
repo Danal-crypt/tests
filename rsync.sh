@@ -56,7 +56,7 @@ while IFS= read -r hostname; do
     echo "Running rsync dry-run for $hostname..."
     sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS --dry-run \
         -e "ssh -o StrictHostKeyChecking=no" \
-        "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
+        "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/" > /dev/null 2>&1
     if [ $? -ne 0 ]; then
         echo "[FAILURE] Rsync dry-run failed for $hostname. Skipping..."
         continue
@@ -64,8 +64,8 @@ while IFS= read -r hostname; do
 
     # Ask the user whether to proceed with the actual rsync transfer
     while true; do
-        # Prompt user and wait for input
-        echo -n "Do you want to proceed with the actual rsync transfer for $hostname? (yes/no): "
+        # Ensure no background process output interferes with the prompt
+        echo -n "Do you want to proceed with the actual rsync transfer for $hostname? (yes/no): " >&2
         read -r user_input
 
         # Normalize user input (lowercase and trim whitespace)

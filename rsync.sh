@@ -56,7 +56,7 @@ while IFS= read -r hostname; do
     echo "Running rsync dry-run for $hostname with stats..."
     sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS --dry-run \
         -e "ssh -o StrictHostKeyChecking=no" \
-        "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/" 2>&1
+        "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
     if [ $? -ne 0 ]; then
         echo "[FAILURE] Rsync dry-run failed for $hostname."
         continue
@@ -71,6 +71,12 @@ while IFS= read -r hostname; do
         echo -n "Enter the code to confirm the transfer for $hostname: "
         read -r user_input
 
+        # Ensure input is not empty
+        if [[ -z "$user_input" ]]; then
+            echo "No input detected. Please enter the code."
+            continue
+        fi
+
         # Echo what the user entered
         echo "You entered: $user_input"
 
@@ -78,7 +84,7 @@ while IFS= read -r hostname; do
             echo "Code verified. Proceeding with actual rsync transfer for $hostname..."
             sshpass -p "$PASSWORD" rsync $RSYNC_OPTIONS \
                 -e "ssh -o StrictHostKeyChecking=no" \
-                "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/" 2>&1
+                "$LOCAL_SOURCE_DIR/" "${REMOTE_USER}@${hostname}:${REMOTE_DEST_DIR}/"
             if [ $? -eq 0 ]; then
                 echo "[SUCCESS] Rsync transfer completed for $hostname."
             else

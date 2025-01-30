@@ -1,0 +1,138 @@
+
+
+
+---
+
+Knowledge Base Article: Creating and Managing Authentication Tokens for Splunk Deployment Server (DS)
+
+1. Purpose and Scope
+
+This document provides detailed instructions for creating an authentication token in the Splunk Deployment Server (DS). The generated token will be securely stored in CyberArk for future access.
+
+
+---
+
+2. Resources or Prerequisites
+
+Required Resources:
+
+Access to the DS with administrative account privileges.
+
+Access to the DS CLI for executing commands.
+
+CyberArk access for storing the generated token.
+
+
+
+---
+
+3. Creating a Token in the Deployment Server (DS)
+
+1. Log into the DS from the jump host environment.
+
+
+2. Navigate to:
+Settings > Tokens on the DS using your administrative account.
+
+
+3. Click "New Token" and configure the settings as follows:
+
+User: admin
+
+Audience: DS reload token for <your_username>
+
+Expiration: Default to 30 days or set <Relative Time> (e.g., 30 days for testing).
+
+Not Before: Leave blank.
+
+
+
+4. Generate the Token and immediately email it to yourself in an encrypted email.
+Important: You cannot view the token again after leaving the page. Use the following email settings:
+
+New Mail: Nonpublic
+
+Encryption: FDIC Internal Only-Encrypt
+
+
+
+
+
+---
+
+4. Onboarding Token to CyberArk
+
+The CyberArk team will onboard the token.
+To initiate onboarding:
+
+1. Open a CyberArk Onboarding Request.
+
+
+
+
+---
+
+5. Modifying or Updating a Token in CyberArk
+
+1. Log in to CyberArk.
+
+
+2. Search for the admin account.
+
+
+3. Select the account.
+
+
+4. Click the "Change" button to update the token.
+
+
+
+
+---
+
+6. Reloading the Deployment Server via CLI
+
+1. Log into the Deployment Server.
+
+
+2. Switch to the Splunk user:
+
+su splunk
+
+
+3. Navigate to the script location:
+/home/splunk/
+
+
+4. Execute the reload command:
+
+Reloading only a server class:
+
+/home/splunk/
+
+Full server reload (no specific server class):
+
+/home/splunk/
+
+
+
+
+
+---
+
+7. Notification of Expired Tokens
+
+An alert is configured in the DS with the title:
+"Deployment Server - Authentication Token Expiring in 30 Days"
+This will send an email alert to:
+
+
+---
+
+8. Glossary of Acronyms and Terms
+
+DS: Deployment Server
+
+
+
+---

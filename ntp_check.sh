@@ -1,28 +1,24 @@
 #!/bin/bash
 
-# Timestamp and host
 timestamp=$(date -Iseconds)
 host=$(hostname)
 source="ntp_status_linux"
 
 # Timezone
-timezone=$(timedatectl | grep "Time zone" | awk '{print $3}')
+timezone=$(timedatectl | awk -F ': ' '/Time zone/ {print $2}' | awk '{print $1}')
 
-# NTP server(s) from chrony.conf
-ntp_servers=$(grep -E '^server|^pool' /etc/chrony.conf | awk '{print $2}' | paste -sd "," -)
+# NTP servers from chrony.conf
+ntp_servers=$(grep -E '^server|^pool' /etc/chrony.conf 2>/dev/null | awk '{print $2}' | paste -sd "," -)
 
-# Is system clock synchronized?
-ntp_sync_status=$(timedatectl | grep "System clock synchronized" | awk '{print $4}')
+# System clock sync status
+ntp_sync_status=$(timedatectl | awk -F ': ' '/System clock synchronized/ {print $2}')
 
-# Is chronyd active and enabled?
-chronyd_status=$(systemctl is-active chronyd)
-chronyd_enabled=$(systemctl is-enabled chronyd)
+# chronyd service status
+chronyd_status=$(systemctl is-active chronyd 2>/dev/null)
+chronyd_enabled=$(systemctl is-enabled chronyd 2>/dev/null)
 
-# Chrony tracking data (offset, stratum, ref ID)
-tracking=$(chronyc tracking)
-stratum=$(echo "$tracking" | grep -i "Stratum" | awk '{print $2}')
-ref_source=$(echo "$tracking" | grep -i "Reference ID" | awk '{print $3}')
-offset=$(echo "$tracking" | grep -i "Last offset" | awk '{print $3,$4}')
+# Full chronyc tracking output (compressed to a single-line string)
+tracking_raw=$(chronyc tracking 2>/dev/null | sed ':a;N;$!ba;s/\n/ | /g' | sed 's/"/'\''/g')
 
-# Output in Splunk-friendly key-value format
-echo "timestamp=$timestamp host=$host timezone=$timezone ntp_servers=$ntp_servers chronyd_status=$chronyd_status chronyd_enabled=$chronyd_enabled time_in_sync=$ntp_sync_status stratum=$stratum ref_source=$ref_source offset=\"$offset\" source=$source"
+# Output in key=value format
+echo "timestamp=$timestamp host=$host timezone=$timezone ntp_servers=$ntp_servers chronyd_status=$chronyd_status chronyd_enabled=$chronyd_enabled time_in_sync=$ntp_sync_status tracking_raw=\"$tracking_raw\" source=$source"

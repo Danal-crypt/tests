@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Editable section
+# Editable Targets
 HOSTS=("8.8.8.8" "1.1.1.1")
 PORTS=("53" "443")
 TRANSPORTS=("tcp" "udp")
@@ -14,26 +14,28 @@ for HOST in "${HOSTS[@]}"; do
       ERROR=""
 
       if [[ "$TRANSPORT" == "tcp" ]]; then
-        OUTPUT=$(nc -z -w2 "$HOST" "$PORT" 2>&1)
-        if [[ $? -eq 0 ]]; then
+        OUTPUT=$(nc -z -v -w2 "$HOST" "$PORT" 2>&1)
+        EXIT_CODE=$?
+        if [[ $EXIT_CODE -eq 0 ]]; then
           CONNECTED="yes"
         else
-          ERROR=$OUTPUT
+          ERROR="${OUTPUT:-nc tcp connection failed with exit code $EXIT_CODE}"
         fi
 
       elif [[ "$TRANSPORT" == "udp" ]]; then
-        OUTPUT=$(nc -z -u -w2 "$HOST" "$PORT" 2>&1)
-        if [[ $? -eq 0 ]]; then
+        OUTPUT=$(echo | nc -u -v -w2 "$HOST" "$PORT" 2>&1)
+        EXIT_CODE=$?
+        if [[ $EXIT_CODE -eq 0 ]]; then
           CONNECTED="yes"
         else
-          ERROR=$OUTPUT
+          ERROR="${OUTPUT:-nc udp connection failed with exit code $EXIT_CODE}"
         fi
       fi
 
       if [[ "$CONNECTED" == "yes" ]]; then
-        echo "timestamp=\"$TIMESTAMP\" connected_host=\"$HOST\" connected_port=\"$PORT\" connected=\"$CONNECTED\" transport=\"$TRANSPORT\""
+        echo "timestamp=\"$TIMESTAMP\" connected_host=\"$HOST\" connected_port=\"$PORT\" connected=\"yes\" transport=\"$TRANSPORT\""
       else
-        echo "timestamp=\"$TIMESTAMP\" connected_host=\"$HOST\" connected_port=\"$PORT\" connected=\"$CONNECTED\" transport=\"$TRANSPORT\" error=\"${ERROR//\"/\\\"}\""
+        echo "timestamp=\"$TIMESTAMP\" connected_host=\"$HOST\" connected_port=\"$PORT\" connected=\"no\" transport=\"$TRANSPORT\" error=\"${ERROR//\"/\\\"}\""
       fi
     done
   done

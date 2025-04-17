@@ -14,28 +14,31 @@ for HOST in "${HOSTS[@]}"; do
       ERROR=""
 
       if [[ "$TRANSPORT" == "tcp" ]]; then
-        OUTPUT=$(nc -z -v -w2 "$HOST" "$PORT" 2>&1)
+        OUTPUT=$(nc -zv -w2 "$HOST" "$PORT" 2>&1)
         EXIT_CODE=$?
         if [[ $EXIT_CODE -eq 0 ]]; then
           CONNECTED="yes"
         else
-          ERROR="${OUTPUT:-nc tcp connection failed with exit code $EXIT_CODE}"
+          ERROR="$OUTPUT"
         fi
 
       elif [[ "$TRANSPORT" == "udp" ]]; then
-        OUTPUT=$(echo | nc -u -v -w2 "$HOST" "$PORT" 2>&1)
+        OUTPUT=$(echo | nc -zvu -w2 "$HOST" "$PORT" 2>&1)
         EXIT_CODE=$?
         if [[ $EXIT_CODE -eq 0 ]]; then
           CONNECTED="yes"
         else
-          ERROR="${OUTPUT:-nc udp connection failed with exit code $EXIT_CODE}"
+          ERROR="$OUTPUT"
         fi
       fi
 
+      # Clean up quotes in error for Splunk-friendly output
+      ERROR="${ERROR//\"/\\\"}"
+
       if [[ "$CONNECTED" == "yes" ]]; then
-        echo "timestamp=\"$TIMESTAMP\" connected_host=\"$HOST\" connected_port=\"$PORT\" connected=\"yes\" transport=\"$TRANSPORT\""
+        echo "timestamp=\"$TIMESTAMP\" connected_host=\"$HOST\" connected_port=\"$PORT\" connected=\"$CONNECTED\" transport=\"$TRANSPORT\""
       else
-        echo "timestamp=\"$TIMESTAMP\" connected_host=\"$HOST\" connected_port=\"$PORT\" connected=\"no\" transport=\"$TRANSPORT\" error=\"${ERROR//\"/\\\"}\""
+        echo "timestamp=\"$TIMESTAMP\" connected_host=\"$HOST\" connected_port=\"$PORT\" connected=\"$CONNECTED\" transport=\"$TRANSPORT\" error=\"$ERROR\""
       fi
     done
   done

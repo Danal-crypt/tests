@@ -17,8 +17,7 @@ ntp_sync_status=$(timedatectl | awk -F ': ' '/System clock synchronized/ {print 
 chronyd_status=$(systemctl is-active chronyd 2>/dev/null)
 chronyd_enabled=$(systemctl is-enabled chronyd 2>/dev/null)
 
-# Full chronyc tracking output (compressed to a single-line string)
-tracking_raw=$(chronyc tracking 2>/dev/null | sed ':a;N;$!ba;s/\n/ | /g' | sed 's/"/'\''/g')
+# Output key-value header line
+echo "timestamp=$timestamp host=$host timezone=$timezone ntp_servers=$ntp_servers chronyd_status=$chronyd_status chronyd_enabled=$chronyd_enabled time_in_sync=$ntp_sync_status source=$source"
 
-# Output in key=value format
-echo "timestamp=$timestamp host=$host timezone=$timezone ntp_servers=$ntp_servers chronyd_status=$chronyd_status chronyd_enabled=$chronyd_enabled time_in_sync=$ntp_sync_status tracking_raw=\"$tracking_raw\" source=$source"
+# Now output chronyc tracking output

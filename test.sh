@@ -11,13 +11,12 @@ for HOST in "${HOSTS[@]}"; do
   for PORT in "${PORTS[@]}"; do
     for TRANSPORT in "${TRANSPORTS[@]}"; do
       CONNECTED="no"
-      ERROR=""
       MESSAGE=""
+      ERROR=""
 
       if [[ "$TRANSPORT" == "tcp" ]]; then
-        OUTPUT=$(nc -zvw2 "$HOST" "$PORT" 2>&1)
-        EXIT_CODE=$?
-        if [[ $EXIT_CODE -eq 0 ]]; then
+        OUTPUT=$(nc -zv -w2 "$HOST" "$PORT" 2>&1)
+        if echo "$OUTPUT" | grep -qi "connected to"; then
           CONNECTED="yes"
           MESSAGE="$OUTPUT"
         else
@@ -26,8 +25,7 @@ for HOST in "${HOSTS[@]}"; do
 
       elif [[ "$TRANSPORT" == "udp" ]]; then
         OUTPUT=$(echo | nc -zvuw2 "$HOST" "$PORT" 2>&1)
-        EXIT_CODE=$?
-        if [[ $EXIT_CODE -eq 0 ]]; then
+        if echo "$OUTPUT" | grep -qi "succeeded"; then
           CONNECTED="yes"
           MESSAGE="$OUTPUT"
         else
@@ -35,7 +33,7 @@ for HOST in "${HOSTS[@]}"; do
         fi
       fi
 
-      # Escape quotes
+      # Clean strings for Splunk-safe output
       ERROR="${ERROR//\"/\\\"}"
       MESSAGE="${MESSAGE//\"/\\\"}"
 

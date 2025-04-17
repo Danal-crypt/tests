@@ -20,4 +20,6 @@ chronyd_enabled=$(systemctl is-enabled chronyd 2>/dev/null)
 # Output key-value header line
 echo "timestamp=$timestamp host=$host timezone=$timezone ntp_servers=$ntp_servers chronyd_status=$chronyd_status chronyd_enabled=$chronyd_enabled time_in_sync=$ntp_sync_status source=$source"
 
-# Now output chronyc tracking output
+# Now output chronyc tracking output as separate lines under a single field name
+echo "tracking_raw="
+chronyc tracking 2>/dev/null

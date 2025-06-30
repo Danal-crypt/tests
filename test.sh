@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# ================================
+# USAGE: ./testPorts.sh
+# ================================
+
 # Define list of hosts
 HOSTS=("host1.example.com" "host2.example.com")
 
@@ -23,11 +28,21 @@ else
   NCFLAG=""
 fi
 
-# Loop through hosts and ports
+# Function to test a single host/port combo
+test_connection() {
+  local HOST=$1
+  local PORT=$2
+  echo "<$(timestamp)> $USER sending to $HOST port $PORT $PROTOCOL"
+  echo "<$(timestamp)> $USER sending to $HOST port $PORT $PROTOCOL" | nc -v $NCFLAG "$HOST" "$PORT" &> >(sed "s/^/[$HOST:$PORT] /")
+}
+
+# Launch all tests in parallel
 for HOST in "${HOSTS[@]}"; do
   for PORT in "${PORTS[@]}"; do
-    echo "<$(timestamp)> $HOST $USER sending to $HOST port $PORT $PROTOCOL"
-    echo "<$(timestamp)> $HOST $USER sending to $HOST port $PORT $PROTOCOL" | nc -v $NCFLAG "$HOST" "$PORT"
-    echo "------------------------------------------------------------"
+    test_connection "$HOST" "$PORT" &
   done
 done
+
+# Wait for all background jobs to complete
+wait
+echo "✅ All tests completed."

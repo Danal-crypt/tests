@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# === Config ===
+CLASS="_Restart_Forwarder"
+HOST="${1:-}"
+SPLUNK_HOME_DEFAULT="/opt/splunk"     # Change if your DS is splunkforwarder or elsewhere
+SERVERCLASS_PATH="${SPLUNK_HOME:-$SPLUNK_HOME_DEFAULT}/etc/system/local/serverclass.conf"
+RELOAD_SCRIPT="$(dirname "$0")/reload_ds.sh"   # Assumes reload_ds.sh sits next to this script
+
+# === Helpers ===
+die() { echo "ERROR: $*" >&2; exit 1; }
+info() { echo "[*] $*"; }
+
+[[ -n "$HOST" ]] || die "Usage: $0 <deployment_client_hostname>"
+[[ -x "$RELOAD_SCRIPT" ]] || die "Cannot execute reload script at: $RELOAD_SCRIPT"
+[[ -f "$SERVERCLASS_PATH" ]] || die "serverclass.conf not found at: $SERVERCLASS_PATH"
+
+LOCK_F="$SERVERCLASS_PATH.lock"
+TS="$(date +%Y%m%d-%H%M%S)"
+BACKUP="${SERVERCLASS_PATH}.bak.${TS}"
+
+# File lock to avoid concurrent edits
+exec 9>"$LOCK_F" || die "Cannot open lock file: $LOCK_F"
+if ! flock -n 9; then
+  die "Another process is modifying serverclass.conf. Try again shortly."
+fi
+
+trap 'flock -u 9' EXIT
+
+info "Backing up serverclass.conf -> $BACKUP"
+cp -p "$SERVERCLASS_PATH" "$BACKUP"
+
+# Check if stanza exists; if not, create it at EOF.
+if ! grep -qE "^\[serverClass:${CLASS}\]\s*$" "$SERVERCLASS_PATH"; then
+  info "Creating stanza [serverClass:${CLASS}]"
+  {
+    echo ""
+    echo "[serverClass:${CLASS}]"
+  } >> "$SERVERCLASS_PATH"
+fi
+
+# If host already whitelisted in this server class, avoid adding duplicate
+if awk -v cls="$CLASS" -v h="$HOST" '
+  BEGIN{in=0}
+  /^\[serverClass:[^]]+\]/ {in = ($0=="[serverClass:" cls "]")}
+  in && /^[[:space:]]*whitelist\.[0-9]+[[:space:]]*=/ {
+    if ($0 ~ ("=\\s*^" h "\\$\\s*$")) { found=1 }
+  }
+  END{ exit(found?0:1) }
+' "$SERVERCLASS_PATH"; then
+  info "Host already present in [serverClass:${CLASS}] whitelist: ^${HOST}\$"
+  ALREADY_PRESENT=1
+else
+  ALREADY_PRESENT=0
+fi
+
+ADDED_BLOCK=0
+IDX=""
+
+# If not present, compute next numeric whitelist index and insert a temporary block.
+if [[ "$ALREADY_PRESENT" -eq 0 ]]; then
+  IDX="$(awk -v cls="$CLASS" '
+    BEGIN{in=0; max=-1}
+    /^\[serverClass:[^]]+\]/ {in = ($0=="[serverClass:" cls "]")}
+    in && /^[[:space:]]*whitelist\.([0-9]+)[[:space:]]*=/ {
+      if (match($0,/whitelist\.([0-9]+)/,m)) {
+        n = m[1]+0; if (n>max) max=n
+      }
+    }
+    END{ print (max+1) }
+  ' "$SERVERCLASS_PATH")"
+
+  [[ "$IDX" =~ ^[0-9]+$ ]] || die "Failed to compute next whitelist index."
+
+  TMP="${SERVERCLASS_PATH}.tmp.${TS}"
+
+  info "Inserting whitelist.${IDX} = ^${HOST}\$ into [serverClass:${CLASS}]"
+  awk -v cls="$CLASS" -v host="$HOST" -v idx="$IDX" -v ts="$TS" '
+    BEGIN{in=0; inserted=0}
+    # When we hit any serverClass header
+    /^\[serverClass:[^]]+\]/ {
+      if (in && !inserted) {
+        print "  # END RESTART_UF " host " " ts " " idx
+        inserted=1
+      }
+      in = ($0=="[serverClass:" cls "]")
+      print $0
+      next
+    }
+    {
+      print $0
+    }
+    END{
+      if (in && !inserted) {
+        # Append to end of target stanza
+        print "  # BEGIN RESTART_UF " host " " ts " " idx
+        print "  whitelist." idx " = ^" host "$"
+        print "  # END RESTART_UF " host " " ts " " idx
+        inserted=1
+      }
+    }
+  ' "$SERVERCLASS_PATH" > "$TMP"
+
+  mv "$TMP" "$SERVERCLASS_PATH"
+  ADDED_BLOCK=1
+fi
+
+# Run the reload script for the class
+info "Reloading Deployment Server for class: ${CLASS}"
+set +e
+"$RELOAD_SCRIPT" "$CLASS"
+RC=$?
+set -e
+
+if [[ $RC -ne 0 ]]; then
+  info "Reload failed (exit $RC). Rolling back changes."
+  if [[ "$ADDED_BLOCK" -eq 1 ]]; then
+    cp -p "$BACKUP" "$SERVERCLASS_PATH"
+  fi
+  die "Deployment reload failed."
+fi
+
+# On success, remove only the block we added (if we added one)
+if [[ "$ADDED_BLOCK" -eq 1 ]]; then
+  info "Reload succeeded. Removing temporary whitelist block."
+  # Remove the marked block
+  sed -i "/# BEGIN RESTART_UF ${HOST} ${TS} ${IDX}/,/# END RESTART_UF ${HOST} ${TS} ${IDX}/d" "$SERVERCLASS_PATH"
+
+  # Optional: tidy up extra blank lines (not strictly necessary)
+  # awk 'NF{blank=0} !NF{if(blank) next; blank=1} {print}' -i inplace "$SERVERCLASS_PATH"
+
+  info "Temporary entry removed."
+else
+  info "No temporary entry was added (host already present); nothing to remove."
+fi
+
+info "Done."

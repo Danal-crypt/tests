@@ -4,13 +4,12 @@ set -euo pipefail
 # === Config ===
 CLASS="_Restart_Forwarder"
 HOST="${1:-}"
-SPLUNK_HOME_DEFAULT="/opt/splunk"     # Change if your DS is splunkforwarder or elsewhere
+SPLUNK_HOME_DEFAULT="/opt/splunk"  # change if needed
 SERVERCLASS_PATH="${SPLUNK_HOME:-$SPLUNK_HOME_DEFAULT}/etc/system/local/serverclass.conf"
-RELOAD_SCRIPT="$(dirname "$0")/reload_ds.sh"   # Assumes reload_ds.sh sits next to this script
+RELOAD_SCRIPT="$(dirname "$0")/reload_ds.sh"   # assumes reload_ds.sh is next to this script
 
-# === Helpers ===
-die() { echo "ERROR: $*" >&2; exit 1; }
-info() { echo "[*] $*"; }
+die(){ echo "ERROR: $*" >&2; exit 1; }
+info(){ echo "[*] $*"; }
 
 [[ -n "$HOST" ]] || die "Usage: $0 <deployment_client_hostname>"
 [[ -x "$RELOAD_SCRIPT" ]] || die "Cannot execute reload script at: $RELOAD_SCRIPT"
@@ -19,35 +18,32 @@ info() { echo "[*] $*"; }
 LOCK_F="$SERVERCLASS_PATH.lock"
 TS="$(date +%Y%m%d-%H%M%S)"
 BACKUP="${SERVERCLASS_PATH}.bak.${TS}"
+TMP="${SERVERCLASS_PATH}.tmp.${TS}.$$"
 
-# File lock to avoid concurrent edits
+# single-writer lock
 exec 9>"$LOCK_F" || die "Cannot open lock file: $LOCK_F"
-if ! flock -n 9; then
-  die "Another process is modifying serverclass.conf. Try again shortly."
-fi
-
+flock -n 9 || die "Another process is modifying serverclass.conf. Try again shortly."
 trap 'flock -u 9' EXIT
 
 info "Backing up serverclass.conf -> $BACKUP"
 cp -p "$SERVERCLASS_PATH" "$BACKUP"
 
-# Check if stanza exists; if not, create it at EOF.
+# Ensure stanza exists
 if ! grep -qE "^\[serverClass:${CLASS}\]\s*$" "$SERVERCLASS_PATH"; then
   info "Creating stanza [serverClass:${CLASS}]"
   {
-    echo ""
-    echo "[serverClass:${CLASS}]"
+    printf "\n[serverClass:%s]\n" "$CLASS"
   } >> "$SERVERCLASS_PATH"
 fi
 
-# If host already whitelisted in this server class, avoid adding duplicate
+# Check if host already present
 if awk -v cls="$CLASS" -v h="$HOST" '
-  BEGIN{in=0}
-  /^\[serverClass:[^]]+\]/ {in = ($0=="[serverClass:" cls "]")}
-  in && /^[[:space:]]*whitelist\.[0-9]+[[:space:]]*=/ {
-    if ($0 ~ ("=\\s*^" h "\\$\\s*$")) { found=1 }
+  BEGIN { in_section=0; found=0 }
+  /^\[serverClass:/ { in_section = ($0 == "[serverClass:" cls "]") }
+  in_section && /^[[:space:]]*whitelist\.[0-9]+[[:space:]]*=/ {
+      if ($0 ~ ("=\\s*\\^" h "\\$")) found=1
   }
-  END{ exit(found?0:1) }
+  END { exit(found ? 0 : 1) }
 ' "$SERVERCLASS_PATH"; then
   info "Host already present in [serverClass:${CLASS}] whitelist: ^${HOST}\$"
   ALREADY_PRESENT=1
@@ -58,55 +54,53 @@ fi
 ADDED_BLOCK=0
 IDX=""
 
-# If not present, compute next numeric whitelist index and insert a temporary block.
 if [[ "$ALREADY_PRESENT" -eq 0 ]]; then
+  # Find next whitelist.<n>
   IDX="$(awk -v cls="$CLASS" '
-    BEGIN{in=0; max=-1}
-    /^\[serverClass:[^]]+\]/ {in = ($0=="[serverClass:" cls "]")}
-    in && /^[[:space:]]*whitelist\.([0-9]+)[[:space:]]*=/ {
-      if (match($0,/whitelist\.([0-9]+)/,m)) {
-        n = m[1]+0; if (n>max) max=n
-      }
+    BEGIN { in_section=0; max=-1 }
+    /^\[serverClass:/ { in_section = ($0 == "[serverClass:" cls "]") }
+    in_section && /^[[:space:]]*whitelist\.[0-9]+[[:space:]]*=/ {
+      line=$0
+      # Extract the number after "whitelist."
+      sub(/.*whitelist\./, "", line)
+      sub(/[^0-9].*/, "", line)
+      n=line+0
+      if (n>max) max=n
     }
-    END{ print (max+1) }
+    END { print max+1 }
   ' "$SERVERCLASS_PATH")"
-
   [[ "$IDX" =~ ^[0-9]+$ ]] || die "Failed to compute next whitelist index."
 
-  TMP="${SERVERCLASS_PATH}.tmp.${TS}"
-
   info "Inserting whitelist.${IDX} = ^${HOST}\$ into [serverClass:${CLASS}]"
+
+  # Insert BEGIN/whitelist/END at the end of the target stanza (works even if stanza isn't last)
   awk -v cls="$CLASS" -v host="$HOST" -v idx="$IDX" -v ts="$TS" '
-    BEGIN{in=0; inserted=0}
-    # When we hit any serverClass header
-    /^\[serverClass:[^]]+\]/ {
-      if (in && !inserted) {
-        print "  # END RESTART_UF " host " " ts " " idx
-        inserted=1
-      }
-      in = ($0=="[serverClass:" cls "]")
-      print $0
-      next
+    BEGIN { in_section=0; inserted=0 }
+    /^\[serverClass:/ {
+        if (in_section && !inserted) {
+            print "  # BEGIN RESTART_UF " host " " ts " " idx
+            print "  whitelist." idx " = ^" host "$"
+            print "  # END RESTART_UF " host " " ts " " idx
+            inserted=1
+        }
+        in_section = ($0 == "[serverClass:" cls "]")
+        print $0
+        next
     }
-    {
-      print $0
-    }
-    END{
-      if (in && !inserted) {
-        # Append to end of target stanza
-        print "  # BEGIN RESTART_UF " host " " ts " " idx
-        print "  whitelist." idx " = ^" host "$"
-        print "  # END RESTART_UF " host " " ts " " idx
-        inserted=1
-      }
+    { print $0 }
+    END {
+        if (in_section && !inserted) {
+            print "  # BEGIN RESTART_UF " host " " ts " " idx
+            print "  whitelist." idx " = ^" host "$"
+            print "  # END RESTART_UF " host " " ts " " idx
+        }
     }
   ' "$SERVERCLASS_PATH" > "$TMP"
-
   mv "$TMP" "$SERVERCLASS_PATH"
   ADDED_BLOCK=1
 fi
 
-# Run the reload script for the class
+# Reload DS for the class
 info "Reloading Deployment Server for class: ${CLASS}"
 set +e
 "$RELOAD_SCRIPT" "$CLASS"
@@ -121,15 +115,11 @@ if [[ $RC -ne 0 ]]; then
   die "Deployment reload failed."
 fi
 
-# On success, remove only the block we added (if we added one)
+# On success, remove only the block we added
 if [[ "$ADDED_BLOCK" -eq 1 ]]; then
   info "Reload succeeded. Removing temporary whitelist block."
-  # Remove the marked block
+  # remove the exact marked block
   sed -i "/# BEGIN RESTART_UF ${HOST} ${TS} ${IDX}/,/# END RESTART_UF ${HOST} ${TS} ${IDX}/d" "$SERVERCLASS_PATH"
-
-  # Optional: tidy up extra blank lines (not strictly necessary)
-  # awk 'NF{blank=0} !NF{if(blank) next; blank=1} {print}' -i inplace "$SERVERCLASS_PATH"
-
   info "Temporary entry removed."
 else
   info "No temporary entry was added (host already present); nothing to remove."

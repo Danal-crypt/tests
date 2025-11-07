@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+########################################
+# 1) CONFIG — EDIT THESE VALUES
+########################################
+CLIENT_TOKEN="akab-REPLACE_ME"
+CLIENT_SECRET="REPLACE_ME_BASE64_SECRET"   # exactly as given by Akamai (base64), no spaces/newlines
+ACCESS_TOKEN="akab-REPLACE_ME"
+HOST="your-subdomain.luna.akamaiapis.net" # no scheme, just the host
+
+EVENT_PATH="/event-viewer-api/v1/events"  # API path
+PRODUCT="WAF"                              # e.g., WAF (adjust if needed)
+TIME_WINDOW_MINUTES=5                      # look-back window (minutes)
+OUT_PREFIX="akamai_events"                 # output filename prefix
+OUT_DIR="."                                # where to save files (e.g., /var/tmp)
+
+# Optional: turn on debug to see what’s being signed
+DEBUG="${DEBUG:-0}"                        # set to 1 for verbose signing output
+
+########################################
+# 2) DEPENDENCY CHECKS
+########################################
+need() { command -v "$1" >/dev/null 2>&1 || { echo "Missing dependency: $1" >&2; exit 1; }; }
+need curl
+need openssl
+# jq is optional (pretty-print). If present we’ll use it.
+
+########################################
+# 3) TIME WINDOW (UTC -> ISO8601 and Akamai auth ts)
+########################################
+END_ISO="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+START_ISO="$(date -u -d "-${TIME_WINDOW_MINUTES} minutes" +"%Y-%m-%dT%H:%M:%SZ")"
+AUTH_TS="$(date -u +"%Y%m%dT%H:%M:%S+0000")"
+NONCE="$(uuidgen 2>/dev/null || openssl rand -hex 16)"
+
+########################################
+# 4) QUERY STRING (exactly what the API expects)
+########################################
+# Product is safe ASCII; times are already ISO8601
+QUERY="product=${PRODUCT}&start=${START_ISO}&end=${END_ISO}"
+
+########################################
+# 5) EDGEGRID SIGNING (EG1-HMAC-SHA256)
+########################################
+METHOD="GET"
+SCHEME="https"
+PATH="$EVENT_PATH"
+BODY=""
+
+# 5a) content hash of body (GET -> empty string)
+CONTENT_HASH="$(printf '%s' "$BODY" | openssl dgst -binary -sha256 | base64)"
+
+# 5b) auth data (without signature)
+AUTH_DATA="client_token=${CLIENT_TOKEN};access_token=${ACCESS_TOKEN};timestamp=${AUTH_TS};nonce=${NONCE}"
+
+# 5c) derive signing key: base64( HMAC_SHA256( base64decode(client_secret), timestamp ) )
+#     robust base64 decode (strip accidental newlines/spaces)
+DECODED_SECRET="$(printf '%s' "$CLIENT_SECRET" | tr -d '\n\r ' | base64 -d 2>/dev/null || true)"
+if [ -z "$DECODED_SECRET" ]; then
+  echo "ERROR: CLIENT_SECRET could not be base64-decoded. Check it for extra spaces/newlines." >&2
+  exit 1
+fi
+SIGNING_KEY="$(printf '%s' "$AUTH_TS" | \
+  openssl dgst -binary -sha256 -mac HMAC -macopt "key:$DECODED_SECRET" | base64)"
+
+# 5d) data to sign: METHOD \t SCHEME://HOST \t PATH \t QUERY \t CONTENT_HASH \t AUTH_DATA
+TAB=$'\t'
+DATA_TO_SIGN="${METHOD}${TAB}${SCHEME}://${HOST}${TAB}${PATH}${TAB}${QUERY}${TAB}${CONTENT_HASH}${TAB}${AUTH_DATA}"
+
+# 5e) final signature: base64( HMAC_SHA256( base64decode(SIGNING_KEY), DATA_TO_SIGN ) )
+SIG="$(printf '%s' "$DATA_TO_SIGN" | \
+  openssl dgst -binary -sha256 -mac HMAC -macopt "key:$(printf '%s' "$SIGNING_KEY" | base64 -d 2>/dev/null)" | \
+  base64)"
+
+AUTH_HEADER="EG1-HMAC-SHA256 ${AUTH_DATA};signature=${SIG}"
+
+if [ "$DEBUG" = "1" ]; then
+  echo "---- DEBUG: EdgeGrid Signing ----"
+  echo "HOST:        $HOST"
+  echo "PATH:        $PATH"
+  echo "QUERY:       $QUERY"
+  echo "AUTH_TS:     $AUTH_TS"
+  echo "NONCE:       $NONCE"
+  echo "CONTENT_HASH:$CONTENT_HASH"
+  echo -e "DATA_TO_SIGN:\n${DATA_TO_SIGN//${TAB}/\\t}"
+  echo "AUTH_HEADER: $AUTH_HEADER"
+  echo "---------------------------------"
+fi
+
+########################################
+# 6) REQUEST + OUTPUT
+########################################
+URL="${SCHEME}://${HOST}${PATH}?${QUERY}"
+STAMP="$(date -u +"%Y%m%dT%H%M%SZ")"
+OUTFILE="${OUT_DIR%/}/${OUT_PREFIX}_${STAMP}.json"
+
+echo "Pulling ${PRODUCT} events from ${START_ISO} to ${END_ISO} (UTC)..."
+HTTP_STATUS="$(
+  curl -sS -w '%{http_code}' -o "$OUTFILE" \
+    -H "Accept: application/json" \
+    -H "Authorization: ${AUTH_HEADER}" \
+    "$URL"
+)"
+
+# Basic status handling
+case "$HTTP_STATUS" in
+  2*) : ;;
+  *)  echo "Request failed with HTTP $HTTP_STATUS. See $OUTFILE for error JSON." >&2; exit 1 ;;
+esac
+
+# Optional: pretty print if jq exists and response is JSON
+if command -v jq >/dev/null 2>&1; then
+  if jq . "$OUTFILE" >/dev/null 2>&1; then
+    tmp="${OUTFILE}.tmp"; jq . "$OUTFILE" >"$tmp" && mv "$tmp" "$OUTFILE"
+  fi
+fi
+
+echo "Saved events -> $OUTFILE"

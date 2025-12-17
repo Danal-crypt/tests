@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Targets to maintain
 CHAIN_FILES=(
-  # "/opt/splunk/etc/apps/Splunk_TA_microsoft-cloudservices/bin/cacert.pem"
+  "/opt/splunk/lib/python3.7/site-packages/certifi/cacert.pem"
+  "/opt/splunk/lib/python3.9/site-packages/certifi/cacert.pem"
 )
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,42 +12,63 @@ COMMENT_PREFIX="# added-from:"
 
 log(){ echo "[$(date '+%F %T')] $*"; }
 
-# Expand cert files in this directory (adjust globs if you want)
+# Get SHA256 fingerprint from a PEM cert file (single cert)
+cert_fp() {
+  openssl x509 -in "$1" -noout -fingerprint -sha256 \
+    | sed -E 's/^.*=//; s/://g' | tr 'A-F' 'a-f'
+}
+
+# Extract all certs from a chain and output their SHA256 fingerprints (one per line)
+chain_fps() {
+  local chain="$1"
+  awk '
+    /-----BEGIN CERTIFICATE-----/ {p=1}
+    p {print}
+    /-----END CERTIFICATE-----/   {p=0; print ""}  # blank line between certs
+  ' "$chain" \
+  | awk 'NF{print} !NF{print "---CERT---"}' \
+  | awk '
+      $0=="---CERT---" {
+        # end of a cert block, print it
+        if (cert!="") { print cert; cert="" }
+        next
+      }
+      { cert = cert $0 "\n" }
+      END { if (cert!="") print cert }
+    ' \
+  | while IFS= read -r certpem; do
+      [[ -z "${certpem//[[:space:]]/}" ]] && continue
+      openssl x509 -noout -fingerprint -sha256 2>/dev/null <<<"$certpem" \
+        | sed -E 's/^.*=//; s/://g' | tr 'A-F' 'a-f'
+    done
+}
+
 shopt -s nullglob
 CERT_FILES=( "$SCRIPT_DIR"/*.pem "$SCRIPT_DIR"/*.crt )
 shopt -u nullglob
-
-((${#CHAIN_FILES[@]})) || { echo "No CHAIN_FILES set"; exit 1; }
-((${#CERT_FILES[@]}))  || { echo "No cert files found in $SCRIPT_DIR"; exit 1; }
+((${#CERT_FILES[@]})) || { echo "No cert files found in $SCRIPT_DIR"; exit 1; }
 
 for chain in "${CHAIN_FILES[@]}"; do
   [[ -f "$chain" ]] || { echo "Missing chain: $chain"; exit 1; }
   [[ -w "$chain" ]] || { echo "Not writable: $chain"; exit 1; }
 
-  # Only create backup if we actually change something
+  log "----"
+  log "Target chain: $chain"
+
+  mapfile -t fps_before < <(chain_fps "$chain" | sort -u)
+
   backed_up=0
-
   for cert in "${CERT_FILES[@]}"; do
-    # Skip script itself if it matches glob somehow
-    [[ "$cert" == "${BASH_SOURCE[0]}" ]] && continue
+    # Skip non-PEM certs (quick check)
+    grep -q "-----BEGIN CERTIFICATE-----" "$cert" || continue
 
-    # Pull the first PEM block (assumes one cert per file)
-    pem_block="$(awk '
-      /-----BEGIN CERTIFICATE-----/ {in=1}
-      in {print}
-      /-----END CERTIFICATE-----/ {exit}
-    ' "$cert")"
+    fp="$(cert_fp "$cert")"
 
-    # If no PEM block, ignore file
-    [[ -n "${pem_block//[[:space:]]/}" ]] || continue
-
-    # Check if exact block already exists
-    if grep -Fqx -- "$pem_block" "$chain"; then
+    if printf "%s\n" "${fps_before[@]}" | grep -qx "$fp"; then
       log "$(basename "$cert") already present in $chain"
       continue
     fi
 
-    # Backup once per chain before first edit
     if [[ "$backed_up" -eq 0 ]]; then
       cp -p "$chain" "${chain}.bak.${TS}"
       log "Backup created: ${chain}.bak.${TS}"
@@ -58,8 +79,11 @@ for chain in "${CHAIN_FILES[@]}"; do
     {
       echo
       echo "${COMMENT_PREFIX} $(basename "$cert")"
-      echo "$pem_block"
+      cat "$cert"
     } >> "$chain"
+
+    # update in-memory list so we don't append twice in same run
+    fps_before+=("$fp")
   done
 
   [[ "$backed_up" -eq 0 ]] && log "No changes needed for $chain"

@@ -18,29 +18,25 @@ cert_fp() {
     | sed -E 's/^.*=//; s/://g' | tr 'A-F' 'a-f'
 }
 
-# Extract all certs from a chain and output their SHA256 fingerprints (one per line)
+# Extract all cert fingerprints from a chain file (robust against comments/blank lines)
 chain_fps() {
   local chain="$1"
-  awk '
-    /-----BEGIN CERTIFICATE-----/ {p=1}
-    p {print}
-    /-----END CERTIFICATE-----/   {p=0; print ""}  # blank line between certs
-  ' "$chain" \
-  | awk 'NF{print} !NF{print "---CERT---"}' \
-  | awk '
-      $0=="---CERT---" {
-        # end of a cert block, print it
-        if (cert!="") { print cert; cert="" }
-        next
-      }
-      { cert = cert $0 "\n" }
-      END { if (cert!="") print cert }
-    ' \
-  | while IFS= read -r certpem; do
-      [[ -z "${certpem//[[:space:]]/}" ]] && continue
-      openssl x509 -noout -fingerprint -sha256 2>/dev/null <<<"$certpem" \
-        | sed -E 's/^.*=//; s/://g' | tr 'A-F' 'a-f'
-    done
+  # Convert PEM bundle -> PKCS7 -> print certs, then fingerprint each PEM block.
+  openssl crl2pkcs7 -nocrl -certfile "$chain" 2>/dev/null \
+    | openssl pkcs7 -print_certs 2>/dev/null \
+    | awk '
+        /-----BEGIN CERTIFICATE-----/ {p=1; cert=""; }
+        p { cert = cert $0 "\n" }
+        /-----END CERTIFICATE-----/ {
+          p=0;
+          print cert;
+        }
+      ' \
+    | while IFS= read -r certpem; do
+        [[ -z "${certpem//[[:space:]]/}" ]] && continue
+        openssl x509 -noout -fingerprint -sha256 2>/dev/null <<<"$certpem" \
+          | sed -E 's/^.*=//; s/://g' | tr 'A-F' 'a-f'
+      done
 }
 
 shopt -s nullglob
@@ -59,12 +55,12 @@ for chain in "${CHAIN_FILES[@]}"; do
 
   backed_up=0
   for cert in "${CERT_FILES[@]}"; do
-    # Skip non-PEM certs (quick check)
-    grep -q "-----BEGIN CERTIFICATE-----" "$cert" || continue
+    # Skip non-PEM certs (quick check) - FIXED: use -- so pattern isn't treated as an option
+    grep -q -- "-----BEGIN CERTIFICATE-----" "$cert" || continue
 
     fp="$(cert_fp "$cert")"
 
-    if printf "%s\n" "${fps_before[@]}" | grep -qx "$fp"; then
+    if printf "%s\n" "${fps_before[@]}" | grep -qx -- "$fp"; then
       log "$(basename "$cert") already present in $chain"
       continue
     fi
@@ -89,4 +85,4 @@ for chain in "${CHAIN_FILES[@]}"; do
   [[ "$backed_up" -eq 0 ]] && log "No changes needed for $chain"
 done
 
-log "Done."
+log "Done." 

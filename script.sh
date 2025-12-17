@@ -6,92 +6,124 @@ CHAIN_FILES=(
   "/opt/splunk/lib/python3.9/site-packages/certifi/cacert.pem"
 )
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TS="$(date '+%Y%m%d_%H%M%S')"
 COMMENT_PREFIX="# added-from:"
-
-log(){ echo "[$(date '+%F %T')] $*"; }
 
 normalize_pem_stream() {
   sed -e 's/\r$//' -e 's/^[[:space:]]\+//'
 }
 
-cert_fp() {
-  normalize_pem_stream < "$1" \
+fp_from_pem_stdin() {
+  normalize_pem_stream \
     | openssl x509 -noout -fingerprint -sha256 2>/dev/null \
     | sed -E 's/^.*=//; s/://g' | tr 'A-F' 'a-f'
 }
 
-chain_fps() {
+dedupe_added_only_one_chain() {
   local chain="$1"
+  local tmp
+  tmp="$(mktemp)"
 
-  awk '
-    /-----BEGIN CERTIFICATE-----/ {in_cert=1; cert=""; }
-    in_cert { cert = cert $0 "\n" }
-    /-----END CERTIFICATE-----/ {
-      in_cert=0;
-      print cert;
+  cp -p "$chain" "${chain}.bak.${TS}"
+
+  awk -v prefix="$COMMENT_PREFIX" '
+    BEGIN {
+      in_cert=0
+      pending_comment=""
+      in_added=0
+      cert=""
+      print_mode=1
+    }
+
+    $0 ~ ("^" prefix) {
+      pending_comment=$0
+      in_added=1
+      next
+    }
+
+    /-----BEGIN CERTIFICATE-----/ {
+      in_cert=1
+      cert=$0 "\n"
+      next
+    }
+
+    in_cert==1 {
+      cert=cert $0 "\n"
+      if ($0 ~ /-----END CERTIFICATE-----/) {
+        in_cert=0
+
+        if (in_added==1) {
+          print pending_comment
+          print cert
+          print "__ADDED_CERT_END__"
+        } else {
+          printf "%s", cert
+          printf "\n"
+        }
+
+        pending_comment=""
+        in_added=0
+        cert=""
+      }
+      next
+    }
+
+    {
+      if (in_added==0) {
+        print $0
+      }
+      next
     }
   ' "$chain" \
-  | while IFS= read -r certpem; do
-      [[ -z "${certpem//[[:space:]]/}" ]] && continue
-      printf "%s" "$certpem" \
-        | normalize_pem_stream \
-        | openssl x509 -noout -fingerprint -sha256 2>/dev/null \
-        | sed -E 's/^.*=//; s/://g' | tr 'A-F' 'a-f'
-    done
+  | {
+      declare -A seen_added
+      out_vendor=""
+      buf_comment=""
+      buf_cert=""
+      in_added_stream=0
+
+      while IFS= read -r line; do
+        if [[ "$line" == "__ADDED_CERT_END__" ]]; then
+          fp="$(printf "%s" "$buf_cert" | fp_from_pem_stdin || true)"
+          if [[ -n "$fp" ]]; then
+            if [[ -z "${seen_added[$fp]+x}" ]]; then
+              seen_added[$fp]=1
+              [[ -n "$buf_comment" ]] && printf "%s\n" "$buf_comment"
+              printf "%s" "$buf_cert"
+              printf "\n"
+            fi
+          fi
+          buf_comment=""
+          buf_cert=""
+          in_added_stream=0
+          continue
+        fi
+
+        if [[ "$line" == "${COMMENT_PREFIX}"* ]]; then
+          buf_comment="$line"
+          in_added_stream=1
+          continue
+        fi
+
+        if [[ "$in_added_stream" -eq 1 ]]; then
+          buf_cert+="$line"$'\n'
+          continue
+        fi
+
+        printf "%s\n" "$line"
+      done
+    } > "$tmp"
+
+  cp -p "$tmp" "$chain"
+  rm -f "$tmp"
 }
-
-shopt -s nullglob
-CERT_FILES=( "$SCRIPT_DIR"/*.pem "$SCRIPT_DIR"/*.crt )
-shopt -u nullglob
-
-((${#CERT_FILES[@]})) || { echo "No cert files found in $SCRIPT_DIR"; exit 1; }
-((${#CHAIN_FILES[@]})) || { echo "No CHAIN_FILES configured"; exit 1; }
 
 for chain in "${CHAIN_FILES[@]}"; do
   [[ -f "$chain" ]] || { echo "Missing chain: $chain"; exit 1; }
   [[ -w "$chain" ]] || { echo "Not writable: $chain"; exit 1; }
 
-  log "----"
-  log "Target chain: $chain"
-
-  mapfile -t fps_in_chain < <(chain_fps "$chain" | sed '/^$/d' | sort -u)
-
-  backed_up=0
-
-  for cert in "${CERT_FILES[@]}"; do
-    [[ -f "$cert" ]] || continue
-    grep -q -- "-----BEGIN CERTIFICATE-----" "$cert" || continue
-
-    fp="$(cert_fp "$cert")"
-    if [[ -z "${fp:-}" ]]; then
-      log "WARN: Could not fingerprint $(basename "$cert")"
-      continue
-    fi
-
-    if printf "%s\n" "${fps_in_chain[@]}" | grep -qx -- "$fp"; then
-      log "$(basename "$cert") already present in $chain"
-      continue
-    fi
-
-    if [[ "$backed_up" -eq 0 ]]; then
-      cp -p "$chain" "${chain}.bak.${TS}"
-      log "Backup created: ${chain}.bak.${TS}"
-      backed_up=1
-    fi
-
-    log "Appending $(basename "$cert") to $chain"
-    {
-      echo
-      echo "${COMMENT_PREFIX} $(basename "$cert")"
-      normalize_pem_stream < "$cert"
-    } >> "$chain"
-
-    fps_in_chain+=("$fp")
-  done
-
-  [[ "$backed_up" -eq 0 ]] && log "No changes needed for $chain"
+  echo "Deduping added certs only: $chain"
+  dedupe_added_only_one_chain "$chain"
 done
 
-log "Done." 
+echo "Done." 

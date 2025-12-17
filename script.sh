@@ -1,34 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# -----------------------------
-# Config: target chain files
-# -----------------------------
 CHAIN_FILES=(
   "/opt/splunk/lib/python3.7/site-packages/certifi/cacert.pem"
   "/opt/splunk/lib/python3.9/site-packages/certifi/cacert.pem"
 )
 
-# -----------------------------
-# Globals
-# -----------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TS="$(date '+%Y%m%d_%H%M%S')"
 COMMENT_PREFIX="# added-from:"
 
 log(){ echo "[$(date '+%F %T')] $*"; }
 
-# -----------------------------
-# Fingerprint helpers
-# -----------------------------
-# SHA256 fingerprint for a PEM cert file (assumes 1 cert per file)
+normalize_pem_stream() {
+  sed -e 's/\r$//' -e 's/^[[:space:]]\+//'
+}
+
 cert_fp() {
-  openssl x509 -in "$1" -noout -fingerprint -sha256 \
+  normalize_pem_stream < "$1" \
+    | openssl x509 -noout -fingerprint -sha256 2>/dev/null \
     | sed -E 's/^.*=//; s/://g' | tr 'A-F' 'a-f'
 }
 
-# Extract every PEM cert block from a chain file and output SHA256 fingerprints (one per line)
-# This is robust against comments, blank lines, and extra non-PEM text.
 chain_fps() {
   local chain="$1"
 
@@ -42,50 +35,46 @@ chain_fps() {
   ' "$chain" \
   | while IFS= read -r certpem; do
       [[ -z "${certpem//[[:space:]]/}" ]] && continue
-      openssl x509 -noout -fingerprint -sha256 2>/dev/null <<<"$certpem" \
+      printf "%s" "$certpem" \
+        | normalize_pem_stream \
+        | openssl x509 -noout -fingerprint -sha256 2>/dev/null \
         | sed -E 's/^.*=//; s/://g' | tr 'A-F' 'a-f'
     done
 }
 
-# -----------------------------
-# Discover certs in script dir
-# -----------------------------
 shopt -s nullglob
 CERT_FILES=( "$SCRIPT_DIR"/*.pem "$SCRIPT_DIR"/*.crt )
 shopt -u nullglob
-((${#CERT_FILES[@]})) || { echo "No cert files found in $SCRIPT_DIR"; exit 1; }
 
+((${#CERT_FILES[@]})) || { echo "No cert files found in $SCRIPT_DIR"; exit 1; }
 ((${#CHAIN_FILES[@]})) || { echo "No CHAIN_FILES configured"; exit 1; }
 
-# -----------------------------
-# Main
-# -----------------------------
 for chain in "${CHAIN_FILES[@]}"; do
   [[ -f "$chain" ]] || { echo "Missing chain: $chain"; exit 1; }
-  [[ -w "$chain" ]] || { echo "Not writable: $chain (run as correct user/sudo)"; exit 1; }
+  [[ -w "$chain" ]] || { echo "Not writable: $chain"; exit 1; }
 
   log "----"
   log "Target chain: $chain"
 
-  # Snapshot fingerprints currently in the chain
-  mapfile -t fps_in_chain < <(chain_fps "$chain" | sort -u)
+  mapfile -t fps_in_chain < <(chain_fps "$chain" | sed '/^$/d' | sort -u)
 
   backed_up=0
 
   for cert in "${CERT_FILES[@]}"; do
     [[ -f "$cert" ]] || continue
-
-    # Skip non-PEM (and avoid grep interpreting pattern as an option)
     grep -q -- "-----BEGIN CERTIFICATE-----" "$cert" || continue
 
     fp="$(cert_fp "$cert")"
+    if [[ -z "${fp:-}" ]]; then
+      log "WARN: Could not fingerprint $(basename "$cert")"
+      continue
+    fi
 
     if printf "%s\n" "${fps_in_chain[@]}" | grep -qx -- "$fp"; then
       log "$(basename "$cert") already present in $chain"
       continue
     fi
 
-    # Backup once per chain, only if we are going to edit
     if [[ "$backed_up" -eq 0 ]]; then
       cp -p "$chain" "${chain}.bak.${TS}"
       log "Backup created: ${chain}.bak.${TS}"
@@ -96,10 +85,9 @@ for chain in "${CHAIN_FILES[@]}"; do
     {
       echo
       echo "${COMMENT_PREFIX} $(basename "$cert")"
-      cat "$cert"
+      normalize_pem_stream < "$cert"
     } >> "$chain"
 
-    # Update in-memory list so we don't append the same cert twice in one run
     fps_in_chain+=("$fp")
   done
 

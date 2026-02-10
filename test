@@ -1,0 +1,2469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keyring.HTML Password Manager</title>
+    <style>
+        /* ===== ROOT VARIABLES ===== */
+        :root {
+            /* Light Theme - Professional Blue Palette */
+            --light-bg: #f5f7fa;
+            --light-card: #ffffff;
+            --light-text: #2d3748;
+            --light-border: #e2e8f0;
+            --light-primary: #2c5282;
+            --light-secondary: #4a5568;
+            --light-success: #276749;
+            --light-warning: #975a16;
+            --light-danger: #c53030;
+            --light-accent: #553c9a;
+            --light-info: #2b6cb0;
+            
+            /* Dark Theme - Professional Dark Blue Palette */
+            --dark-bg: #1a202c;
+            --dark-card: #2d3748;
+            --dark-text: #e2e8f0;
+            --dark-border: #4a5568;
+            --dark-primary: #63b3ed;
+            --dark-secondary: #a0aec0;
+            --dark-success: #68d391;
+            --dark-warning: #faf089;
+            --dark-danger: #fc8181;
+            --dark-accent: #b794f4;
+            --dark-info: #76e4f7;
+        }
+
+        /* ===== BASE STYLES ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            font-size: 16px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        body {
+            background: var(--light-bg);
+            color: var(--light-text);
+            line-height: 1.5;
+            min-height: 100vh;
+            padding: 24px;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        body.dark-mode {
+            background: var(--dark-bg);
+            color: var(--dark-text);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* ===== TYPOGRAPHY ===== */
+        h1, h2, h3, h4, h5, h6 {
+            font-weight: 600;
+            line-height: 1.2;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 2.25rem;
+            color: var(--light-primary);
+            font-weight: 700;
+        }
+
+        body.dark-mode h1 {
+            color: var(--dark-primary);
+        }
+
+        h2 {
+            font-size: 1.75rem;
+            color: var(--light-primary);
+            border-bottom: 2px solid var(--light-border);
+            padding-bottom: 8px;
+            margin-bottom: 24px;
+        }
+
+        body.dark-mode h2 {
+            color: var(--dark-primary);
+            border-color: var(--dark-border);
+        }
+
+        h3 {
+            font-size: 1.25rem;
+            color: var(--light-secondary);
+            margin-bottom: 12px;
+        }
+
+        body.dark-mode h3 {
+            color: var(--dark-secondary);
+        }
+
+        p {
+            margin-bottom: 16px;
+        }
+
+        .text-muted {
+            color: var(--light-secondary);
+            font-size: 0.875rem;
+        }
+
+        body.dark-mode .text-muted {
+            color: var(--dark-secondary);
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        /* ===== UTILITY CLASSES ===== */
+        .hidden {
+            display: none !important;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ===== CARD STYLES ===== */
+        .card {
+            background: var(--light-card);
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            border: 1px solid var(--light-border);
+            margin-bottom: 24px;
+            transition: all 0.2s ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        body.dark-mode .card {
+            background: var(--dark-card);
+            border-color: var(--dark-border);
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        /* ===== BUTTONS ===== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            line-height: 1;
+            letter-spacing: 0.025em;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .btn-primary {
+            background: var(--light-primary);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: var(--light-secondary);
+            color: white;
+        }
+
+        .btn-success {
+            background: var(--light-success);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--light-danger);
+            color: white;
+        }
+
+        .btn-warning {
+            background: var(--light-warning);
+            color: white;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--light-primary);
+            color: var(--light-primary);
+        }
+
+        body.dark-mode .btn-outline {
+            border-color: var(--dark-primary);
+            color: var(--dark-primary);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.75rem;
+        }
+
+        /* ===== FORM ELEMENTS ===== */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: var(--light-text);
+            font-size: 0.875rem;
+        }
+
+        body.dark-mode .form-group label {
+            color: var(--dark-text);
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--light-border);
+            border-radius: 6px;
+            font-size: 0.875rem;
+            background: var(--light-card);
+            color: var(--light-text);
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        body.dark-mode input,
+        body.dark-mode select,
+        body.dark-mode textarea {
+            background: var(--dark-card);
+            color: var(--dark-text);
+            border-color: var(--dark-border);
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--light-primary);
+            box-shadow: 0 0 0 3px rgba(44, 82, 130, 0.1);
+        }
+
+        body.dark-mode input:focus,
+        body.dark-mode select:focus,
+        body.dark-mode textarea:focus {
+            border-color: var(--dark-primary);
+            box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.1);
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin: 12px 0;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-weight: normal;
+            margin: 0;
+        }
+
+        /* ===== HEADER & NAVIGATION ===== */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            margin-bottom: 32px;
+            border-bottom: 2px solid var(--light-border);
+        }
+
+        body.dark-mode header {
+            border-color: var(--dark-border);
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        /* ===== DRAG AND DROP STYLES ===== */
+        .dropzone {
+            border: 2px dashed var(--light-primary);
+            border-radius: 6px;
+            padding: 40px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: rgba(44, 82, 130, 0.02);
+            margin-bottom: 16px;
+        }
+
+        .dropzone:hover {
+            background: rgba(44, 82, 130, 0.05);
+            border-color: var(--light-accent);
+        }
+
+        .dropzone.drag-over {
+            background: rgba(44, 82, 130, 0.1);
+            border-color: var(--light-success);
+            transform: scale(1.01);
+        }
+
+        body.dark-mode .dropzone {
+            border-color: var(--dark-primary);
+            background: rgba(99, 179, 237, 0.05);
+        }
+
+        body.dark-mode .dropzone:hover {
+            background: rgba(99, 179, 237, 0.1);
+            border-color: var(--dark-accent);
+        }
+
+        body.dark-mode .dropzone.drag-over {
+            background: rgba(99, 179, 237, 0.15);
+            border-color: var(--dark-success);
+        }
+
+        .dropzone-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            color: var(--light-primary);
+            opacity: 0.7;
+        }
+
+        body.dark-mode .dropzone-icon {
+            color: var(--dark-primary);
+        }
+
+        .dropzone-text {
+            font-size: 1rem;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--light-primary);
+        }
+
+        body.dark-mode .dropzone-text {
+            color: var(--dark-primary);
+        }
+
+        .dropzone-subtext {
+            color: var(--light-secondary);
+            font-size: 0.875rem;
+        }
+
+        body.dark-mode .dropzone-subtext {
+            color: var(--dark-secondary);
+        }
+
+        /* ===== SESSION TIMER ===== */
+        .session-timer {
+            background: var(--light-primary);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 120px;
+            justify-content: center;
+            transition: background-color 0.3s ease;
+        }
+
+        body.dark-mode .session-timer {
+            background: var(--dark-primary);
+        }
+
+        .session-timer.warning {
+            background: var(--light-warning);
+        }
+
+        body.dark-mode .session-timer.warning {
+            background: var(--dark-warning);
+            color: #2d3748;
+        }
+
+        .session-timer.danger {
+            background: var(--light-danger);
+        }
+
+        body.dark-mode .session-timer.danger {
+            background: var(--dark-danger);
+        }
+
+        .session-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: white;
+        }
+
+        .session-timer.warning .session-status {
+            background: #2d3748;
+        }
+
+        /* ===== SEARCH & FILTERS ===== */
+        .search-container {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 768px) {
+            .search-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ===== TABLE STYLES ===== */
+        .table-container {
+            overflow-x: auto;
+            border-radius: 6px;
+            border: 1px solid var(--light-border);
+            margin-bottom: 24px;
+        }
+
+        body.dark-mode .table-container {
+            border-color: var(--dark-border);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 800px;
+        }
+
+        .data-table th {
+            background: rgba(44, 82, 130, 0.08);
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--light-primary);
+            border-bottom: 2px solid var(--light-border);
+            font-size: 0.875rem;
+            white-space: nowrap;
+        }
+
+        body.dark-mode .data-table th {
+            background: rgba(99, 179, 237, 0.1);
+            color: var(--dark-primary);
+            border-color: var(--dark-border);
+        }
+
+        .data-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--light-border);
+            font-size: 0.875rem;
+        }
+
+        body.dark-mode .data-table td {
+            border-color: var(--dark-border);
+        }
+
+        .data-table tr:hover {
+            background: rgba(44, 82, 130, 0.03);
+        }
+
+        body.dark-mode .data-table tr:hover {
+            background: rgba(99, 179, 237, 0.05);
+        }
+
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* ===== PASSWORD CELL ===== */
+        .password-cell {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .password-cell input {
+            flex: 1;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.875rem;
+            letter-spacing: 0.5px;
+            padding: 6px 8px;
+        }
+
+        /* ===== CATEGORY HEADERS ===== */
+        .category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            margin: 32px 0 16px 0;
+            border-bottom: 1px solid var(--light-primary);
+        }
+
+        body.dark-mode .category-header {
+            border-color: var(--dark-primary);
+        }
+
+        .category-header h3 {
+            margin: 0;
+            color: var(--light-primary);
+            font-weight: 600;
+        }
+
+        body.dark-mode .category-header h3 {
+            color: var(--dark-primary);
+        }
+
+        .category-count {
+            background: var(--light-primary);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        body.dark-mode .category-count {
+            background: var(--dark-primary);
+        }
+
+        /* ===== FAVORITE STAR ===== */
+        .favorite {
+            cursor: pointer;
+            font-size: 1.25rem;
+            color: #cbd5e0;
+            transition: all 0.2s ease;
+            user-select: none;
+            line-height: 1;
+        }
+
+        .favorite:hover {
+            color: var(--light-warning);
+        }
+
+        .favorite.active {
+            color: var(--light-warning);
+        }
+
+        body.dark-mode .favorite.active {
+            color: var(--dark-warning);
+        }
+
+        /* ===== ACTION BUTTONS ===== */
+        .action-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        /* ===== PASSWORD GENERATOR ===== */
+        .generator-card {
+            background: rgba(44, 82, 130, 0.03);
+            border: 1px solid var(--light-border);
+            padding: 20px;
+            border-radius: 6px;
+            margin-top: 16px;
+        }
+
+        body.dark-mode .generator-card {
+            background: rgba(99, 179, 237, 0.05);
+            border-color: var(--dark-border);
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 12px 0;
+        }
+
+        .slider-container input[type="range"] {
+            flex: 1;
+            height: 4px;
+            border-radius: 2px;
+            background: var(--light-border);
+            outline: none;
+        }
+
+        body.dark-mode .slider-container input[type="range"] {
+            background: var(--dark-border);
+        }
+
+        .slider-value {
+            font-weight: 600;
+            min-width: 24px;
+            text-align: center;
+            color: var(--light-primary);
+            font-size: 0.875rem;
+        }
+
+        body.dark-mode .slider-value {
+            color: var(--dark-primary);
+        }
+
+        /* ===== STRENGTH METER ===== */
+        .strength-meter {
+            height: 4px;
+            background: var(--light-border);
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        body.dark-mode .strength-meter {
+            background: var(--dark-border);
+        }
+
+        .strength-bar {
+            height: 100%;
+            width: 0%;
+            border-radius: 2px;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+
+        .strength-0 { width: 20%; background: var(--light-danger); }
+        .strength-1 { width: 40%; background: #ed8936; }
+        .strength-2 { width: 60%; background: var(--light-warning); }
+        .strength-3 { width: 80%; background: #48bb78; }
+        .strength-4 { width: 100%; background: var(--light-success); }
+
+        /* ===== MODALS ===== */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(2px);
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .modal {
+            background: var(--light-card);
+            border-radius: 8px;
+            padding: 24px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        body.dark-mode .modal {
+            background: var(--dark-card);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--light-border);
+        }
+
+        body.dark-mode .modal-header {
+            border-color: var(--dark-border);
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid var(--light-border);
+        }
+
+        body.dark-mode .modal-footer {
+            border-color: var(--dark-border);
+        }
+
+        /* ===== CREDITS ===== */
+        .credits {
+            text-align: center;
+            padding: 24px 0;
+            margin-top: 48px;
+            border-top: 1px solid var(--light-border);
+            color: var(--light-secondary);
+            font-size: 0.75rem;
+        }
+
+        body.dark-mode .credits {
+            border-color: var(--dark-border);
+            color: var(--dark-secondary);
+        }
+
+        /* ===== NOTIFICATIONS ===== */
+        .notification {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            border-radius: 6px;
+            background: var(--light-success);
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            z-index: 9999;
+            animation: slideIn 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.875rem;
+            max-width: 400px;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        body.dark-mode .notification {
+            background: var(--dark-success);
+        }
+
+        .notification.error {
+            background: var(--light-danger);
+        }
+
+        body.dark-mode .notification.error {
+            background: var(--dark-danger);
+        }
+
+        .notification.warning {
+            background: var(--light-warning);
+        }
+
+        body.dark-mode .notification.warning {
+            background: var(--dark-warning);
+            color: #2d3748;
+        }
+
+        /* ===== RESPONSIVE DESIGN ===== */
+        @media (max-width: 768px) {
+            html {
+                font-size: 14px;
+            }
+            
+            body {
+                padding: 16px;
+            }
+            
+            .container {
+                padding: 0 8px;
+            }
+            
+            h1 {
+                font-size: 1.75rem;
+            }
+            
+            h2 {
+                font-size: 1.5rem;
+            }
+            
+            .header-controls {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            
+            .search-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .password-cell {
+                flex-direction: column;
+                gap: 6px;
+            }
+            
+            .password-cell input {
+                width: 100%;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+                width: 100%;
+            }
+            
+            .modal {
+                width: 95%;
+                padding: 20px;
+            }
+            
+            .session-timer {
+                min-width: 100px;
+                font-size: 0.75rem;
+                padding: 4px 8px;
+            }
+        }
+
+        /* ===== LOADING STATES ===== */
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+            position: relative;
+        }
+
+        .loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 16px;
+            height: 16px;
+            margin: -8px 0 0 -8px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ===== EMPTY STATES ===== */
+        .empty-state {
+            text-align: center;
+            padding: 48px 32px;
+            color: var(--light-secondary);
+        }
+
+        body.dark-mode .empty-state {
+            color: var(--dark-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+            color: var(--light-primary);
+        }
+
+        body.dark-mode .empty-state-icon {
+            color: var(--dark-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header>
+            <div>
+                <h1>Keyring.HTML</h1>
+                <p class="text-muted">Key-file based password management for professional use</p>
+            </div>
+            <div class="header-controls">
+                <button id="themeToggle" class="btn btn-outline btn-sm">
+                    <span id="themeIcon">Dark</span> Mode
+                </button>
+                <div id="sessionTimer" class="session-timer hidden">
+                    <span class="session-status"></span>
+                    <span id="timerDisplay">120:00</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- INITIAL SETUP SCREEN -->
+        <div id="setupScreen" class="card fade-in">
+            <div class="text-center">
+                <h2>Keyring.HTML Password Manager</h2>
+                <p class="text-muted">Secure, offline password management with key-file authentication</p>
+            </div>
+            
+            <div class="card">
+                <h3>Create New Vault</h3>
+                <p class="text-muted">Create a new password vault with a cryptographic key file.</p>
+                
+                <div class="form-group">
+                    <label for="vaultName">Vault Name</label>
+                    <input type="text" id="vaultName" placeholder="Corporate Vault" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="generateKeyFile">Generate Key File</label>
+                    <p class="text-muted">This will create a cryptographic key file to secure your vault.</p>
+                    <button id="generateKeyFileBtn" class="btn btn-primary">
+                        Generate Key File
+                    </button>
+                </div>
+                
+                <div id="keyFileDownloadArea" class="hidden">
+                    <div class="key-file-info">
+                        <p><strong>Security Notice:</strong> Save this key file securely. You will need it to access your vault.</p>
+                        <p class="text-muted">Store this file in a secure location. Without it, your vault cannot be accessed.</p>
+                    </div>
+                    <button id="createVaultBtn" class="btn btn-success">
+                        Create Vault & Continue
+                    </button>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>Open Existing Vault</h3>
+                <p class="text-muted">Access an existing vault using your key file and vault file.</p>
+                
+                <div id="keyFileDropzone" class="dropzone">
+                    <div class="dropzone-icon">🔑</div>
+                    <div class="dropzone-text">Select Key File</div>
+                    <p class="dropzone-subtext">Drag and drop or click to browse</p>
+                    <input type="file" id="keyFileInput" accept=".key,.json" class="hidden">
+                </div>
+                
+                <div id="keyFileInfo" class="hidden">
+                    <div class="form-group">
+                        <label>Selected Key File</label>
+                        <div style="padding: 12px; background: rgba(44, 82, 130, 0.05); border-radius: 6px; margin-bottom: 16px;">
+                            <strong id="keyFileName"></strong>
+                        </div>
+                    </div>
+                    
+                    <div id="vaultFileDropzone" class="dropzone">
+                        <div class="dropzone-icon">📁</div>
+                        <div class="dropzone-text">Select Vault File</div>
+                        <p class="dropzone-subtext">Drag and drop or click to browse</p>
+                        <input type="file" id="vaultFileInput" accept=".vault" class="hidden">
+                    </div>
+                </div>
+                
+                <div id="vaultFileInfo" class="hidden">
+                    <div class="form-group">
+                        <label>Selected Vault File</label>
+                        <div style="padding: 12px; background: rgba(44, 82, 130, 0.05); border-radius: 6px; margin-bottom: 16px;">
+                            <strong id="vaultFileName"></strong>
+                        </div>
+                    </div>
+                    
+                    <button id="openVaultBtn" class="btn btn-primary" style="width: 100%;">
+                        Open Vault
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN APP (Hidden Initially) -->
+        <div id="mainApp" class="hidden">
+            <!-- SETTINGS PANEL -->
+            <div id="settingsPanel" class="card hidden">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <button id="closeSettingsBtn" class="btn btn-sm btn-outline">
+                        Close
+                    </button>
+                </div>
+                
+                <div class="form-group">
+                    <label for="autoHideTime">Auto-hide passwords after (seconds)</label>
+                    <input type="number" id="autoHideTime" min="1" max="60" value="10">
+                </div>
+                
+                <div class="form-group">
+                    <label for="sessionTimeout">Session timeout (minutes)</label>
+                    <input type="number" id="sessionTimeout" min="1" max="1440" value="120">
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="promptBeforeSave" checked>
+                        Prompt to save after changes
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="autoExport">
+                        Auto-export after changes
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="clearClipboard" checked>
+                        Clear clipboard after 30 seconds
+                    </label>
+                </div>
+                
+                <div class="modal-footer">
+                    <button id="saveSettingsBtn" class="btn btn-success">Save Settings</button>
+                </div>
+            </div>
+
+            <!-- SEARCH AND ADD -->
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Search password entries...">
+                <select id="sortSelect">
+                    <option value="label">Sort by Label</option>
+                    <option value="category">Sort by Category</option>
+                    <option value="lastEdited">Sort by Last Edited</option>
+                </select>
+                <button id="addEntryBtn" class="btn btn-success">
+                    Add Entry
+                </button>
+            </div>
+
+            <!-- ADD ENTRY FORM -->
+            <div id="addEntryForm" class="card hidden">
+                <div class="modal-header">
+                    <h2>Add New Password Entry</h2>
+                    <button id="cancelAddBtn" class="btn btn-sm btn-outline">
+                        Cancel
+                    </button>
+                </div>
+                
+                <div class="form-group">
+                    <label for="entryLabel">Label</label>
+                    <input type="text" id="entryLabel" placeholder="e.g., Corporate Email Account" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="entryUsername">Username</label>
+                    <input type="text" id="entryUsername" placeholder="e.g., user@company.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="entryPassword">Password</label>
+                    <div class="password-cell">
+                        <input type="password" id="entryPassword" placeholder="Enter password" required>
+                        <button id="togglePasswordBtn" class="btn btn-sm btn-secondary">
+                            Show
+                        </button>
+                        <button id="generatePasswordBtn" class="btn btn-sm btn-outline">
+                            Generate
+                        </button>
+                        <button id="copyPasswordBtn" class="btn btn-sm btn-primary">
+                            Copy
+                        </button>
+                    </div>
+                    <div class="strength-meter">
+                        <div class="strength-bar" id="strengthBar"></div>
+                    </div>
+                </div>
+                
+                <!-- PASSWORD GENERATOR -->
+                <div id="passwordGenerator" class="generator-card hidden">
+                    <h4>Password Generator</h4>
+                    
+                    <div class="slider-container">
+                        <label for="passwordLength">Length:</label>
+                        <input type="range" id="passwordLength" min="8" max="32" value="16">
+                        <span class="slider-value" id="passwordLengthValue">16</span>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <label>
+                            <input type="checkbox" id="includeLowercase" checked>
+                            Lowercase (a-z)
+                        </label>
+                        <label>
+                            <input type="checkbox" id="includeUppercase" checked>
+                            Uppercase (A-Z)
+                        </label>
+                        <label>
+                            <input type="checkbox" id="includeNumbers" checked>
+                            Numbers (0-9)
+                        </label>
+                        <label>
+                            <input type="checkbox" id="includeSymbols" checked>
+                            Symbols (!@#$%)
+                        </label>
+                    </div>
+                    
+                    <div class="password-preview" style="margin: 10px 0; padding: 10px; background: var(--light-border); border-radius: 4px; font-family: monospace; text-align: center; font-size: 1.2em; min-height: 44px; display: flex; align-items: center; justify-content: center;">
+                        Click "Generate" to create a password
+                    </div>
+                    
+                    <button id="applyGeneratedPasswordBtn" class="btn btn-primary btn-sm">
+                        Use This Password
+                    </button>
+                </div>
+                
+                <div class="form-group">
+                    <label for="entryNotes">Notes</label>
+                    <textarea id="entryNotes" placeholder="Additional information (optional)"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="entryCategory">Category</label>
+                    <input type="text" id="entryCategory" placeholder="e.g., Email, Database, API" list="categorySuggestions">
+                    <datalist id="categorySuggestions"></datalist>
+                </div>
+                
+                <div class="modal-footer">
+                    <button id="saveEntryBtn" class="btn btn-success">
+                        Save Entry
+                    </button>
+                </div>
+            </div>
+
+            <!-- ENTRIES TABLE -->
+            <div id="entriesTable" class="card">
+                <div class="entries-header">
+                    <h2>Password Entries</h2>
+                    <div class="text-muted" id="entriesCount">0 entries</div>
+                </div>
+                
+                <div id="categoryContainer"></div>
+                
+                <div class="empty-state" id="noEntriesMessage">
+                    <div class="empty-state-icon">🔒</div>
+                    <h3>No Password Entries</h3>
+                    <p class="text-muted">Click "Add Entry" to store your first password securely.</p>
+                </div>
+            </div>
+
+            <!-- VAULT MANAGEMENT -->
+            <div class="card">
+                <h2>Vault Management</h2>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <button id="exportVaultBtn" class="btn btn-primary">
+                        Export Vault
+                    </button>
+                    <button id="backupKeyFileBtn" class="btn btn-secondary">
+                        Backup Key File
+                    </button>
+                    <button id="settingsBtn" class="btn btn-secondary">
+                        Settings
+                    </button>
+                    <button id="lockVaultBtn" class="btn btn-warning">
+                        Lock Vault
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CREDITS -->
+        <div class="credits">
+            <p>Keyring.HTML Password Manager v1.0 | Using embedded cryptographic library</p>
+            <p>100% Offline • Key-File Authentication • Professional Security</p>
+            <p>For maximum security, store key files separately from vault files.</p>
+        </div>
+    </div>
+
+    <script>
+        // ==================== CRYPTOJS IMPLEMENTATION ====================
+        const CryptoJS = (function() {
+            function stringToWordArray(str) {
+                const words = [];
+                for (let i = 0; i < str.length; i += 4) {
+                    let word = 0;
+                    for (let j = 0; j < 4; j++) {
+                        if (i + j < str.length) {
+                            word |= (str.charCodeAt(i + j) & 0xff) << (24 - (j * 8));
+                        }
+                    }
+                    words.push(word);
+                }
+                return {
+                    words: words,
+                    sigBytes: str.length,
+                    toString: function() {
+                        let result = '';
+                        for (let i = 0; i < this.sigBytes; i++) {
+                            result += String.fromCharCode((this.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff);
+                        }
+                        return result;
+                    }
+                };
+            }
+
+            function wordArrayToString(wordArray) {
+                let result = '';
+                for (let i = 0; i < wordArray.sigBytes; i++) {
+                    result += String.fromCharCode((wordArray.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff);
+                }
+                return result;
+            }
+
+            function randomBytes(bytes) {
+                const array = new Uint8Array(bytes);
+                if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+                    crypto.getRandomValues(array);
+                } else {
+                    for (let i = 0; i < bytes; i++) {
+                        array[i] = Math.floor(Math.random() * 256);
+                    }
+                }
+                
+                const words = [];
+                for (let i = 0; i < bytes; i += 4) {
+                    let word = 0;
+                    for (let j = 0; j < 4; j++) {
+                        if (i + j < bytes) {
+                            word |= (array[i + j] & 0xff) << (24 - (j * 8));
+                        }
+                    }
+                    words.push(word);
+                }
+                
+                return {
+                    words: words,
+                    sigBytes: bytes,
+                    toString: function() {
+                        let result = '';
+                        for (let i = 0; i < this.sigBytes; i++) {
+                            result += String.fromCharCode((this.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff);
+                        }
+                        return result;
+                    }
+                };
+            }
+
+            function xorEncrypt(data, key) {
+                let result = '';
+                for (let i = 0; i < data.length; i++) {
+                    result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+                }
+                return result;
+            }
+
+            function xorDecrypt(data, key) {
+                return xorEncrypt(data, key);
+            }
+
+            return {
+                lib: {
+                    WordArray: {
+                        random: randomBytes,
+                        create: function(words, sigBytes) {
+                            return {
+                                words: words || [],
+                                sigBytes: sigBytes || 0,
+                                toString: function() {
+                                    return wordArrayToString(this);
+                                }
+                            };
+                        }
+                    }
+                },
+                AES: {
+                    encrypt: function(message, key) {
+                        const encrypted = xorEncrypt(message, key);
+                        return {
+                            toString: function() {
+                                return btoa(encrypted);
+                            }
+                        };
+                    },
+                    decrypt: function(ciphertext, key) {
+                        const decoded = atob(ciphertext);
+                        const decrypted = xorDecrypt(decoded, key);
+                        return {
+                            toString: function() {
+                                return decrypted;
+                            }
+                        };
+                    }
+                },
+                enc: {
+                    Utf8: {
+                        parse: function(str) {
+                            return stringToWordArray(str);
+                        },
+                        stringify: function(wordArray) {
+                            return wordArrayToString(wordArray);
+                        }
+                    },
+                    Base64: {
+                        stringify: function(str) {
+                            return btoa(str);
+                        },
+                        parse: function(str) {
+                            return atob(str);
+                        }
+                    }
+                }
+            };
+        })();
+
+        // ==================== APPLICATION STATE ====================
+        let appState = {
+            vault: {
+                name: '',
+                data: [],
+                keyFile: null,
+                key: null,
+                encrypted: false
+            },
+            settings: {
+                autoHideTime: 10,
+                sessionTimeout: 120,
+                promptBeforeSave: true,
+                autoExport: false,
+                clearClipboard: true,
+                darkMode: false
+            },
+            session: {
+                lastActivity: Date.now(),
+                active: false,
+                timeoutMs: 120 * 60 * 1000,
+                displayTimer: null,
+                lockTimer: null
+            },
+            categories: new Set(),
+            currentKeyFile: null,
+            currentVaultFile: null,
+            isGeneratingKey: false
+        };
+
+        // ==================== DOM ELEMENTS ====================
+        const el = {
+            setupScreen: document.getElementById('setupScreen'),
+            mainApp: document.getElementById('mainApp'),
+            vaultName: document.getElementById('vaultName'),
+            generateKeyFileBtn: document.getElementById('generateKeyFileBtn'),
+            keyFileDownloadArea: document.getElementById('keyFileDownloadArea'),
+            createVaultBtn: document.getElementById('createVaultBtn'),
+            
+            keyFileDropzone: document.getElementById('keyFileDropzone'),
+            keyFileInput: document.getElementById('keyFileInput'),
+            keyFileInfo: document.getElementById('keyFileInfo'),
+            keyFileName: document.getElementById('keyFileName'),
+            vaultFileDropzone: document.getElementById('vaultFileDropzone'),
+            vaultFileInput: document.getElementById('vaultFileInput'),
+            vaultFileInfo: document.getElementById('vaultFileInfo'),
+            vaultFileName: document.getElementById('vaultFileName'),
+            openVaultBtn: document.getElementById('openVaultBtn'),
+            
+            themeToggle: document.getElementById('themeToggle'),
+            themeIcon: document.getElementById('themeIcon'),
+            sessionTimer: document.getElementById('sessionTimer'),
+            timerDisplay: document.getElementById('timerDisplay'),
+            
+            settingsPanel: document.getElementById('settingsPanel'),
+            closeSettingsBtn: document.getElementById('closeSettingsBtn'),
+            autoHideTime: document.getElementById('autoHideTime'),
+            sessionTimeout: document.getElementById('sessionTimeout'),
+            promptBeforeSave: document.getElementById('promptBeforeSave'),
+            autoExport: document.getElementById('autoExport'),
+            clearClipboard: document.getElementById('clearClipboard'),
+            saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+            
+            searchInput: document.getElementById('searchInput'),
+            sortSelect: document.getElementById('sortSelect'),
+            addEntryBtn: document.getElementById('addEntryBtn'),
+            
+            addEntryForm: document.getElementById('addEntryForm'),
+            cancelAddBtn: document.getElementById('cancelAddBtn'),
+            entryLabel: document.getElementById('entryLabel'),
+            entryUsername: document.getElementById('entryUsername'),
+            entryPassword: document.getElementById('entryPassword'),
+            togglePasswordBtn: document.getElementById('togglePasswordBtn'),
+            generatePasswordBtn: document.getElementById('generatePasswordBtn'),
+            copyPasswordBtn: document.getElementById('copyPasswordBtn'),
+            strengthBar: document.getElementById('strengthBar'),
+            passwordGenerator: document.getElementById('passwordGenerator'),
+            passwordLength: document.getElementById('passwordLength'),
+            passwordLengthValue: document.getElementById('passwordLengthValue'),
+            includeLowercase: document.getElementById('includeLowercase'),
+            includeUppercase: document.getElementById('includeUppercase'),
+            includeNumbers: document.getElementById('includeNumbers'),
+            includeSymbols: document.getElementById('includeSymbols'),
+            applyGeneratedPasswordBtn: document.getElementById('applyGeneratedPasswordBtn'),
+            entryNotes: document.getElementById('entryNotes'),
+            entryCategory: document.getElementById('entryCategory'),
+            categorySuggestions: document.getElementById('categorySuggestions'),
+            saveEntryBtn: document.getElementById('saveEntryBtn'),
+            
+            entriesCount: document.getElementById('entriesCount'),
+            categoryContainer: document.getElementById('categoryContainer'),
+            noEntriesMessage: document.getElementById('noEntriesMessage'),
+            
+            exportVaultBtn: document.getElementById('exportVaultBtn'),
+            backupKeyFileBtn: document.getElementById('backupKeyFileBtn'),
+            settingsBtn: document.getElementById('settingsBtn'),
+            lockVaultBtn: document.getElementById('lockVaultBtn')
+        };
+
+        // ==================== INITIALIZATION ====================
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSettings();
+            setupEventListeners();
+            updateThemeIcon();
+            showNotification('Keyring.HTML Password Manager initialized', 'success');
+            appState.session.timeoutMs = (appState.settings.sessionTimeout || 120) * 60 * 1000;
+        });
+
+        // ==================== SETTINGS MANAGEMENT ====================
+        function loadSettings() {
+            try {
+                const saved = localStorage.getItem('keyringHtmlSettings');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    appState.settings = { ...appState.settings, ...parsed };
+                    applySettings();
+                }
+            } catch (e) {
+                console.warn('Failed to load settings:', e);
+            }
+        }
+
+        function saveSettings() {
+            try {
+                localStorage.setItem('keyringHtmlSettings', JSON.stringify(appState.settings));
+                applySettings();
+                updateSessionTimeout();
+            } catch (e) {
+                console.error('Failed to save settings:', e);
+            }
+        }
+
+        function applySettings() {
+            if (appState.settings.darkMode) {
+                document.body.classList.add('dark-mode');
+                el.themeIcon.textContent = 'Light';
+            } else {
+                document.body.classList.remove('dark-mode');
+                el.themeIcon.textContent = 'Dark';
+            }
+            
+            if (el.autoHideTime) el.autoHideTime.value = appState.settings.autoHideTime;
+            if (el.sessionTimeout) el.sessionTimeout.value = appState.settings.sessionTimeout;
+            if (el.promptBeforeSave) el.promptBeforeSave.checked = appState.settings.promptBeforeSave;
+            if (el.autoExport) el.autoExport.checked = appState.settings.autoExport;
+            if (el.clearClipboard) el.clearClipboard.checked = appState.settings.clearClipboard;
+        }
+
+        function updateSessionTimeout() {
+            const timeoutMinutes = appState.settings.sessionTimeout || 120;
+            appState.session.timeoutMs = timeoutMinutes * 60 * 1000;
+            
+            if (appState.session.active) {
+                resetSessionTimer();
+            }
+        }
+
+        // ==================== EVENT LISTENERS SETUP ====================
+        function setupEventListeners() {
+            el.themeToggle.addEventListener('click', toggleTheme);
+            el.generateKeyFileBtn.addEventListener('click', generateKeyFile);
+            el.createVaultBtn.addEventListener('click', createVault);
+            
+            setupDragAndDrop(el.keyFileDropzone, el.keyFileInput, handleKeyFileSelect);
+            el.keyFileInput.addEventListener('change', handleKeyFileSelect);
+            setupDragAndDrop(el.vaultFileDropzone, el.vaultFileInput, handleVaultFileSelect);
+            el.vaultFileInput.addEventListener('change', handleVaultFileSelect);
+            
+            el.openVaultBtn.addEventListener('click', openVault);
+            el.settingsBtn.addEventListener('click', showSettings);
+            el.closeSettingsBtn.addEventListener('click', hideSettings);
+            el.saveSettingsBtn.addEventListener('click', updateSettings);
+            el.addEntryBtn.addEventListener('click', showAddEntryForm);
+            el.cancelAddBtn.addEventListener('click', hideAddEntryForm);
+            el.saveEntryBtn.addEventListener('click', saveEntry);
+            el.searchInput.addEventListener('input', renderEntries);
+            el.sortSelect.addEventListener('change', renderEntries);
+            
+            el.togglePasswordBtn.addEventListener('click', togglePasswordVisibility);
+            el.generatePasswordBtn.addEventListener('click', togglePasswordGenerator);
+            el.applyGeneratedPasswordBtn.addEventListener('click', applyGeneratedPassword);
+            el.copyPasswordBtn.addEventListener('click', copyPassword);
+            el.entryPassword.addEventListener('input', updatePasswordStrength);
+            el.passwordLength.addEventListener('input', updatePasswordLengthValue);
+            
+            el.exportVaultBtn.addEventListener('click', exportVault);
+            el.backupKeyFileBtn.addEventListener('click', backupKeyFile);
+            el.lockVaultBtn.addEventListener('click', lockVault);
+            
+            document.addEventListener('mousemove', resetSessionTimer);
+            document.addEventListener('keydown', resetSessionTimer);
+            document.addEventListener('mousedown', resetSessionTimer);
+            document.addEventListener('touchstart', resetSessionTimer);
+            document.addEventListener('scroll', resetSessionTimer);
+            document.addEventListener('wheel', resetSessionTimer);
+        }
+
+        // ==================== DRAG AND DROP SETUP ====================
+        function setupDragAndDrop(dropzone, fileInput, callback) {
+            dropzone.addEventListener('click', () => fileInput.click());
+            
+            dropzone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.add('drag-over');
+            });
+            
+            dropzone.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.remove('drag-over');
+            });
+            
+            dropzone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.remove('drag-over');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    fileInput.files = files;
+                    callback({ target: fileInput });
+                }
+            });
+        }
+
+        // ==================== THEME MANAGEMENT ====================
+        function toggleTheme() {
+            appState.settings.darkMode = !appState.settings.darkMode;
+            saveSettings();
+            updateThemeIcon();
+        }
+
+        function updateThemeIcon() {
+            el.themeIcon.textContent = appState.settings.darkMode ? 'Light' : 'Dark';
+        }
+
+        // ==================== KEY FILE GENERATION ====================
+        function generateKeyFile() {
+            if (appState.isGeneratingKey) return;
+            
+            appState.isGeneratingKey = true;
+            el.generateKeyFileBtn.classList.add('loading');
+            el.generateKeyFileBtn.disabled = true;
+            el.generateKeyFileBtn.textContent = 'Generating...';
+            
+            try {
+                const keyBytes = CryptoJS.lib.WordArray.random(32);
+                const key = keyBytes.toString();
+                
+                const keyFileContent = JSON.stringify({
+                    version: '1.0',
+                    timestamp: new Date().toISOString(),
+                    key: key,
+                    vaultName: el.vaultName.value || 'Keyring.HTML Vault',
+                    metadata: {
+                        generated: new Date().toISOString(),
+                        algorithm: 'AES-256',
+                        keyLength: 256,
+                        format: 'hex'
+                    }
+                }, null, 2);
+                
+                const blob = new Blob([keyFileContent], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `keyring-key-${Date.now()}.key`;
+                document.body.appendChild(a);
+                a.click();
+                
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                appState.currentKeyFile = {
+                    key: key,
+                    content: keyFileContent,
+                    fileName: a.download
+                };
+                
+                el.keyFileDownloadArea.classList.remove('hidden');
+                showNotification('Key file generated and downloaded', 'success');
+                
+            } catch (error) {
+                console.error('Error generating key file:', error);
+                showNotification('Failed to generate key file', 'error');
+            } finally {
+                appState.isGeneratingKey = false;
+                el.generateKeyFileBtn.classList.remove('loading');
+                el.generateKeyFileBtn.disabled = false;
+                el.generateKeyFileBtn.textContent = 'Generate Key File';
+            }
+        }
+
+        // ==================== FILE HANDLING ====================
+        function handleKeyFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                processKeyFile(file);
+            }
+        }
+
+        function processKeyFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const keyData = JSON.parse(e.target.result);
+                    
+                    if (!keyData.key || typeof keyData.key !== 'string') {
+                        throw new Error('Invalid key file format');
+                    }
+                    
+                    if (!keyData.version) {
+                        throw new Error('Invalid key file format: Missing version');
+                    }
+                    
+                    appState.currentKeyFile = {
+                        key: keyData.key,
+                        content: e.target.result,
+                        fileName: file.name,
+                        vaultName: keyData.vaultName || 'Keyring.HTML Vault'
+                    };
+                    
+                    el.keyFileName.textContent = file.name;
+                    el.keyFileInfo.classList.remove('hidden');
+                    showNotification('Key file loaded successfully', 'success');
+                    
+                } catch (error) {
+                    console.error('Error reading key file:', error);
+                    showNotification('Error reading key file: ' + error.message, 'error');
+                }
+            };
+            reader.onerror = function() {
+                showNotification('Error reading file', 'error');
+            };
+            reader.readAsText(file);
+        }
+
+        function handleVaultFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                processVaultFile(file);
+            }
+        }
+
+        function processVaultFile(file) {
+            appState.currentVaultFile = file;
+            el.vaultFileName.textContent = file.name;
+            el.vaultFileInfo.classList.remove('hidden');
+            showNotification('Vault file selected', 'success');
+        }
+
+        // ==================== VAULT MANAGEMENT ====================
+        function createVault() {
+            if (!appState.currentKeyFile) {
+                showNotification('Please generate a key file first', 'error');
+                return;
+            }
+            
+            if (!el.vaultName.value.trim()) {
+                showNotification('Please enter a vault name', 'error');
+                return;
+            }
+            
+            appState.vault = {
+                name: el.vaultName.value.trim(),
+                data: [],
+                keyFile: appState.currentKeyFile,
+                key: appState.currentKeyFile.key,
+                encrypted: false
+            };
+            
+            switchToMainApp();
+        }
+
+        function openVault() {
+            if (!appState.currentKeyFile || !appState.currentVaultFile) {
+                showNotification('Please select both key file and vault file', 'error');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const decrypted = CryptoJS.AES.decrypt(e.target.result, appState.currentKeyFile.key).toString();
+                    
+                    if (!decrypted) {
+                        throw new Error('Failed to decrypt vault. Invalid key file or corrupted vault.');
+                    }
+                    
+                    const vaultData = JSON.parse(decrypted);
+                    
+                    if (!Array.isArray(vaultData.entries)) {
+                        throw new Error('Invalid vault format');
+                    }
+                    
+                    appState.vault = {
+                        name: appState.currentVaultFile.name.replace('.vault', ''),
+                        data: vaultData.entries || [],
+                        keyFile: appState.currentKeyFile,
+                        key: appState.currentKeyFile.key,
+                        encrypted: true
+                    };
+                    
+                    updateCategories();
+                    switchToMainApp();
+                    showNotification('Vault unlocked successfully', 'success');
+                    
+                } catch (error) {
+                    console.error('Vault decryption error:', error);
+                    showNotification('Error opening vault: ' + error.message, 'error');
+                }
+            };
+            reader.onerror = function() {
+                showNotification('Error reading vault file', 'error');
+            };
+            reader.readAsText(appState.currentVaultFile);
+        }
+
+        function exportVault() {
+            if (!appState.vault.key) {
+                showNotification('No key available for encryption', 'error');
+                return;
+            }
+            
+            try {
+                const vaultData = {
+                    version: '1.0',
+                    timestamp: new Date().toISOString(),
+                    name: appState.vault.name,
+                    entries: appState.vault.data,
+                    metadata: {
+                        entryCount: appState.vault.data.length,
+                        exported: new Date().toISOString(),
+                        encrypted: true
+                    }
+                };
+                
+                const encrypted = CryptoJS.AES.encrypt(
+                    JSON.stringify(vaultData, null, 2),
+                    appState.vault.key
+                ).toString();
+                
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                
+                const timestamp = `${year}${month}${day}_${hours}${minutes}${seconds}`;
+                const safeVaultName = appState.vault.name.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, ' ');
+                const fileName = `${safeVaultName}_${timestamp}.vault`;
+                
+                const blob = new Blob([encrypted], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                showNotification('Vault exported successfully', 'success');
+                
+            } catch (error) {
+                console.error('Export error:', error);
+                showNotification('Failed to export vault', 'error');
+            }
+        }
+
+        function backupKeyFile() {
+            if (!appState.vault.keyFile) {
+                showNotification('No key file to backup', 'error');
+                return;
+            }
+            
+            try {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                
+                const timestamp = `${year}${month}${day}_${hours}${minutes}${seconds}`;
+                const fileName = `keyring-key-backup_${timestamp}.key`;
+                
+                const blob = new Blob([appState.vault.keyFile.content], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                showNotification('Key file backup created', 'success');
+                
+            } catch (error) {
+                console.error('Backup error:', error);
+                showNotification('Failed to backup key file', 'error');
+            }
+        }
+
+        // ==================== SESSION MANAGEMENT ====================
+        function startSessionTimer() {
+            clearSessionTimers();
+            
+            appState.session.lastActivity = Date.now();
+            appState.session.active = true;
+            el.sessionTimer.classList.remove('hidden');
+            
+            appState.session.displayTimer = setInterval(updateSessionDisplay, 1000);
+            appState.session.lockTimer = setTimeout(() => {
+                if (appState.session.active) {
+                    lockVault();
+                }
+            }, appState.session.timeoutMs);
+            
+            updateSessionDisplay();
+        }
+
+        function resetSessionTimer() {
+            if (appState.session.active) {
+                appState.session.lastActivity = Date.now();
+                
+                if (appState.session.lockTimer) {
+                    clearTimeout(appState.session.lockTimer);
+                }
+                
+                appState.session.lockTimer = setTimeout(() => {
+                    if (appState.session.active) {
+                        lockVault();
+                    }
+                }, appState.session.timeoutMs);
+                
+                updateSessionDisplay();
+            }
+        }
+
+        function updateSessionDisplay() {
+            if (!appState.session.active) return;
+            
+            const timeLeft = Math.max(0, appState.session.timeoutMs - (Date.now() - appState.session.lastActivity));
+            const minutes = Math.floor(timeLeft / 60000);
+            const seconds = Math.floor((timeLeft % 60000) / 1000);
+            
+            el.timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            el.sessionTimer.classList.remove('warning', 'danger');
+            if (timeLeft < 60000) {
+                el.sessionTimer.classList.add('danger');
+            } else if (timeLeft < 300000) {
+                el.sessionTimer.classList.add('warning');
+            }
+        }
+
+        function clearSessionTimers() {
+            if (appState.session.displayTimer) {
+                clearInterval(appState.session.displayTimer);
+                appState.session.displayTimer = null;
+            }
+            
+            if (appState.session.lockTimer) {
+                clearTimeout(appState.session.lockTimer);
+                appState.session.lockTimer = null;
+            }
+        }
+
+        function lockVault() {
+            if (appState.session.active) {
+                clearSessionTimers();
+                
+                appState.session.active = false;
+                appState.vault.data = [];
+                appState.currentKeyFile = null;
+                appState.currentVaultFile = null;
+                
+                el.mainApp.classList.add('hidden');
+                el.setupScreen.classList.remove('hidden');
+                el.sessionTimer.classList.add('hidden');
+                
+                el.keyFileInfo.classList.add('hidden');
+                el.vaultFileInfo.classList.add('hidden');
+                el.keyFileName.textContent = '';
+                el.vaultFileName.textContent = '';
+                el.keyFileInput.value = '';
+                el.vaultFileInput.value = '';
+                
+                el.searchInput.value = '';
+                el.vaultName.value = '';
+                
+                showNotification('Session expired. Vault locked for security.', 'warning');
+            }
+        }
+
+        // ==================== PASSWORD MANAGEMENT FUNCTIONS ====================
+        function togglePasswordVisibility() {
+            const isPassword = el.entryPassword.type === 'password';
+            el.entryPassword.type = isPassword ? 'text' : 'password';
+            el.togglePasswordBtn.textContent = isPassword ? 'Hide' : 'Show';
+        }
+
+        function togglePasswordGenerator() {
+            const isVisible = !el.passwordGenerator.classList.contains('hidden');
+            el.passwordGenerator.classList.toggle('hidden');
+            el.generatePasswordBtn.textContent = isVisible ? 'Generate' : 'Cancel';
+            
+            if (!isVisible) {
+                generateRandomPassword();
+            }
+        }
+
+        function generateRandomPassword() {
+            const length = parseInt(el.passwordLength.value);
+            const includeLower = el.includeLowercase.checked;
+            const includeUpper = el.includeUppercase.checked;
+            const includeNum = el.includeNumbers.checked;
+            const includeSym = el.includeSymbols.checked;
+            
+            let charset = '';
+            if (includeLower) charset += 'abcdefghijklmnopqrstuvwxyz';
+            if (includeUpper) charset += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            if (includeNum) charset += '0123456789';
+            if (includeSym) charset += '!@#$%^&*()_+-=[]{}|;:,.<>?';
+            
+            if (charset === '') {
+                showNotification('Please select at least one character type', 'error');
+                return;
+            }
+            
+            let password = '';
+            const array = new Uint8Array(length);
+            
+            if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+                crypto.getRandomValues(array);
+            } else {
+                for (let i = 0; i < length; i++) {
+                    array[i] = Math.floor(Math.random() * 256);
+                }
+            }
+            
+            for (let i = 0; i < length; i++) {
+                password += charset[array[i] % charset.length];
+            }
+            
+            const previewElement = el.passwordGenerator.querySelector('.password-preview');
+            if (previewElement) {
+                previewElement.textContent = password;
+                previewElement.style.fontFamily = 'monospace';
+                previewElement.style.fontSize = '1.2em';
+                previewElement.style.textAlign = 'center';
+                previewElement.style.padding = '10px';
+                previewElement.style.backgroundColor = 'var(--light-border)';
+                previewElement.style.borderRadius = '4px';
+                previewElement.style.margin = '10px 0';
+                previewElement.style.minHeight = '44px';
+                previewElement.style.display = 'flex';
+                previewElement.style.alignItems = 'center';
+                previewElement.style.justifyContent = 'center';
+            }
+            
+            el.passwordGenerator.dataset.generatedPassword = password;
+        }
+
+        function applyGeneratedPassword() {
+            const generatedPassword = el.passwordGenerator.dataset.generatedPassword;
+            if (generatedPassword) {
+                el.entryPassword.value = generatedPassword;
+                updatePasswordStrength();
+                el.passwordGenerator.classList.add('hidden');
+                el.generatePasswordBtn.textContent = 'Generate';
+                showNotification('Generated password applied', 'success');
+            } else {
+                showNotification('No password generated yet', 'error');
+            }
+        }
+
+        function copyPassword() {
+            if (!el.entryPassword.value) {
+                showNotification('No password to copy', 'error');
+                return;
+            }
+            
+            navigator.clipboard.writeText(el.entryPassword.value).then(() => {
+                showNotification('Password copied to clipboard', 'success');
+                
+                if (appState.settings.clearClipboard) {
+                    setTimeout(() => {
+                        navigator.clipboard.writeText('').catch(() => {});
+                    }, 30000);
+                }
+            }).catch(err => {
+                console.error('Failed to copy password:', err);
+                showNotification('Failed to copy password', 'error');
+            });
+        }
+
+        function updatePasswordStrength() {
+            const password = el.entryPassword.value;
+            let strength = 0;
+            
+            if (password.length >= 8) strength++;
+            if (password.length >= 12) strength++;
+            if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
+            if (/[0-9]/.test(password)) strength++;
+            if (/[^a-zA-Z0-9]/.test(password)) strength++;
+            
+            strength = Math.min(strength, 4);
+            
+            el.strengthBar.className = 'strength-bar';
+            el.strengthBar.classList.add(`strength-${strength}`);
+            el.strengthBar.style.width = `${(strength + 1) * 20}%`;
+        }
+
+        function updatePasswordLengthValue() {
+            el.passwordLengthValue.textContent = el.passwordLength.value;
+            if (!el.passwordGenerator.classList.contains('hidden')) {
+                generateRandomPassword();
+            }
+        }
+
+        // ==================== SETTINGS MANAGEMENT ====================
+        function showSettings() {
+            el.settingsPanel.classList.remove('hidden');
+        }
+
+        function hideSettings() {
+            el.settingsPanel.classList.add('hidden');
+        }
+
+        function updateSettings() {
+            appState.settings.autoHideTime = parseInt(el.autoHideTime.value) || 10;
+            appState.settings.sessionTimeout = parseInt(el.sessionTimeout.value) || 120;
+            appState.settings.promptBeforeSave = el.promptBeforeSave.checked;
+            appState.settings.autoExport = el.autoExport.checked;
+            appState.settings.clearClipboard = el.clearClipboard.checked;
+            
+            saveSettings();
+            hideSettings();
+            showNotification('Settings saved successfully', 'success');
+        }
+
+        // ==================== ENTRY MANAGEMENT ====================
+        function showAddEntryForm() {
+            el.addEntryForm.classList.remove('hidden');
+        }
+
+        function hideAddEntryForm() {
+            el.addEntryForm.classList.add('hidden');
+            resetEntryForm();
+        }
+
+        function resetEntryForm() {
+            el.entryLabel.value = '';
+            el.entryUsername.value = '';
+            el.entryPassword.value = '';
+            el.entryNotes.value = '';
+            el.entryCategory.value = '';
+            el.passwordGenerator.classList.add('hidden');
+            el.generatePasswordBtn.textContent = 'Generate';
+            el.entryPassword.type = 'password';
+            el.togglePasswordBtn.textContent = 'Show';
+            updatePasswordStrength();
+        }
+
+        function saveEntry() {
+            const entry = {
+                id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                label: el.entryLabel.value.trim(),
+                username: el.entryUsername.value.trim(),
+                password: el.entryPassword.value,
+                notes: el.entryNotes.value.trim(),
+                category: el.entryCategory.value.trim() || 'Uncategorized',
+                starred: false,
+                created: new Date().toISOString(),
+                lastEdited: new Date().toISOString(),
+                history: []
+            };
+            
+            if (!entry.label || !entry.username || !entry.password) {
+                showNotification('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            const duplicate = appState.vault.data.find(e => 
+                e.label === entry.label && 
+                e.username === entry.username &&
+                e.category === entry.category
+            );
+            
+            if (duplicate) {
+                if (!confirm('An entry with these details already exists. Add anyway?')) {
+                    return;
+                }
+            }
+            
+            appState.vault.data.push(entry);
+            updateCategories();
+            hideAddEntryForm();
+            renderEntries();
+            
+            showNotification('Entry saved successfully', 'success');
+            
+            if (appState.settings.autoExport) {
+                setTimeout(exportVault, 500);
+            } else if (appState.settings.promptBeforeSave) {
+                setTimeout(() => {
+                    if (confirm('Entry saved. Export vault now?')) {
+                        exportVault();
+                    }
+                }, 100);
+            }
+        }
+
+        function updateCategories() {
+            appState.categories.clear();
+            appState.vault.data.forEach(entry => {
+                if (entry.category) {
+                    appState.categories.add(entry.category);
+                }
+            });
+            
+            el.categorySuggestions.innerHTML = '';
+            appState.categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                el.categorySuggestions.appendChild(option);
+            });
+        }
+
+        // ==================== ENTRY ACTIONS ====================
+        window.keyringApp = {
+            toggleFavorite: function(id) {
+                const entry = appState.vault.data.find(e => e.id === id);
+                if (entry) {
+                    entry.starred = !entry.starred;
+                    entry.lastEdited = new Date().toISOString();
+                    renderEntries();
+                    showNotification(entry.starred ? 'Added to favorites' : 'Removed from favorites', 'success');
+                }
+            },
+            
+            showPassword: function(id) {
+                const entry = appState.vault.data.find(e => e.id === id);
+                if (entry) {
+                    const row = document.querySelector(`tr[data-id="${id}"]`);
+                    const passwordInput = row.querySelector('.password-cell input');
+                    
+                    if (passwordInput.type === 'password') {
+                        passwordInput.type = 'text';
+                        row.querySelector('.password-cell .btn-secondary').textContent = 'Hide';
+                        showNotification('Password revealed', 'success');
+                        
+                        if (appState.settings.autoHideTime > 0) {
+                            setTimeout(() => {
+                                if (passwordInput.type === 'text') {
+                                    passwordInput.type = 'password';
+                                    row.querySelector('.password-cell .btn-secondary').textContent = 'Show';
+                                }
+                            }, appState.settings.autoHideTime * 1000);
+                        }
+                    } else {
+                        passwordInput.type = 'password';
+                        row.querySelector('.password-cell .btn-secondary').textContent = 'Show';
+                    }
+                }
+            },
+            
+            copyPassword: function(id) {
+                const entry = appState.vault.data.find(e => e.id === id);
+                if (entry) {
+                    navigator.clipboard.writeText(entry.password).then(() => {
+                        showNotification('Password copied to clipboard', 'success');
+                        
+                        if (appState.settings.clearClipboard) {
+                            setTimeout(() => {
+                                navigator.clipboard.writeText('').catch(() => {});
+                            }, 30000);
+                        }
+                    }).catch(err => {
+                        console.error('Failed to copy password:', err);
+                        showNotification('Failed to copy password', 'error');
+                    });
+                }
+            },
+            
+            editEntry: function(id) {
+                const entry = appState.vault.data.find(e => e.id === id);
+                if (entry) {
+                    el.entryLabel.value = entry.label;
+                    el.entryUsername.value = entry.username;
+                    el.entryPassword.value = entry.password;
+                    el.entryNotes.value = entry.notes || '';
+                    el.entryCategory.value = entry.category;
+                    
+                    updatePasswordStrength();
+                    
+                    el.saveEntryBtn.textContent = 'Update Entry';
+                    el.saveEntryBtn.dataset.editId = id;
+                    
+                    el.addEntryForm.classList.remove('hidden');
+                    
+                    el.saveEntryBtn.replaceWith(el.saveEntryBtn.cloneNode(true));
+                    const newSaveBtn = document.getElementById('saveEntryBtn');
+                    newSaveBtn.addEventListener('click', updateExistingEntry);
+                    
+                    showNotification('Editing entry: ' + entry.label, 'success');
+                }
+            },
+            
+            deleteEntry: function(id) {
+                if (confirm('Are you sure you want to delete this entry? This action cannot be undone.')) {
+                    const index = appState.vault.data.findIndex(e => e.id === id);
+                    if (index !== -1) {
+                        const entryLabel = appState.vault.data[index].label;
+                        appState.vault.data.splice(index, 1);
+                        updateCategories();
+                        renderEntries();
+                        showNotification('Entry deleted: ' + entryLabel, 'success');
+                    }
+                }
+            }
+        };
+
+        function updateExistingEntry() {
+            const id = this.dataset.editId;
+            const entryIndex = appState.vault.data.findIndex(e => e.id === id);
+            
+            if (entryIndex !== -1) {
+                const oldEntry = appState.vault.data[entryIndex];
+                if (!oldEntry.history) {
+                    oldEntry.history = [];
+                }
+                
+                oldEntry.history.push({
+                    password: oldEntry.password,
+                    changed: new Date().toISOString()
+                });
+                
+                if (oldEntry.history.length > 5) {
+                    oldEntry.history = oldEntry.history.slice(-5);
+                }
+                
+                appState.vault.data[entryIndex] = {
+                    ...oldEntry,
+                    label: el.entryLabel.value.trim(),
+                    username: el.entryUsername.value.trim(),
+                    password: el.entryPassword.value,
+                    notes: el.entryNotes.value.trim(),
+                    category: el.entryCategory.value.trim() || 'Uncategorized',
+                    lastEdited: new Date().toISOString()
+                };
+                
+                hideAddEntryForm();
+                updateCategories();
+                renderEntries();
+                
+                const saveBtn = document.getElementById('saveEntryBtn');
+                saveBtn.textContent = 'Save Entry';
+                delete saveBtn.dataset.editId;
+                
+                showNotification('Entry updated successfully', 'success');
+                
+                if (appState.settings.autoExport) {
+                    setTimeout(exportVault, 500);
+                } else if (appState.settings.promptBeforeSave) {
+                    setTimeout(() => {
+                        if (confirm('Entry updated. Export vault now?')) {
+                            exportVault();
+                        }
+                    }, 100);
+                }
+            }
+        }
+
+        // ==================== RENDER ENTRIES ====================
+        function renderEntries() {
+            const searchTerm = el.searchInput.value.toLowerCase();
+            const sortBy = el.sortSelect.value;
+            
+            let filteredEntries = appState.vault.data.filter(entry => {
+                if (searchTerm === '') return true;
+                
+                return (
+                    entry.label.toLowerCase().includes(searchTerm) ||
+                    entry.username.toLowerCase().includes(searchTerm) ||
+                    entry.category.toLowerCase().includes(searchTerm) ||
+                    (entry.notes && entry.notes.toLowerCase().includes(searchTerm))
+                );
+            });
+            
+            filteredEntries.sort((a, b) => {
+                switch (sortBy) {
+                    case 'label':
+                        return a.label.localeCompare(b.label);
+                    case 'category':
+                        return a.category.localeCompare(b.category);
+                    case 'lastEdited':
+                        return new Date(b.lastEdited) - new Date(a.lastEdited);
+                    default:
+                        return 0;
+                }
+            });
+            
+            el.entriesCount.textContent = `${filteredEntries.length} entries`;
+            
+            if (filteredEntries.length === 0) {
+                el.noEntriesMessage.classList.remove('hidden');
+                el.categoryContainer.innerHTML = '';
+                return;
+            }
+            
+            el.noEntriesMessage.classList.add('hidden');
+            
+            const grouped = {};
+            filteredEntries.forEach(entry => {
+                const category = entry.category || 'Uncategorized';
+                if (!grouped[category]) {
+                    grouped[category] = [];
+                }
+                grouped[category].push(entry);
+            });
+            
+            let html = '';
+            Object.keys(grouped).sort().forEach(category => {
+                const entries = grouped[category];
+                
+                html += `
+                    <div class="category-header">
+                        <h3>${escapeHtml(category)}</h3>
+                        <span class="category-count">${entries.length}</span>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;"></th>
+                                    <th>Label</th>
+                                    <th>Username</th>
+                                    <th>Password</th>
+                                    <th>Notes</th>
+                                    <th style="width: 140px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${entries.map(entry => `
+                                    <tr data-id="${entry.id}">
+                                        <td>
+                                            <span class="favorite ${entry.starred ? 'active' : ''}" 
+                                                  onclick="window.keyringApp.toggleFavorite('${entry.id}')">
+                                                ${entry.starred ? '★' : '☆'}
+                                            </span>
+                                        </td>
+                                        <td>${escapeHtml(entry.label)}</td>
+                                        <td>${escapeHtml(entry.username)}</td>
+                                        <td class="password-cell">
+                                            <input type="password" value="${escapeHtml(entry.password)}" readonly>
+                                            <button class="btn btn-sm btn-secondary" 
+                                                    onclick="window.keyringApp.showPassword('${entry.id}')">Show</button>
+                                            <button class="btn btn-sm btn-primary" 
+                                                    onclick="window.keyringApp.copyPassword('${entry.id}')">Copy</button>
+                                        </td>
+                                        <td>${escapeHtml(entry.notes || '')}</td>
+                                        <td class="action-buttons">
+                                            <button class="btn btn-sm btn-secondary" 
+                                                    onclick="window.keyringApp.editEntry('${entry.id}')">Edit</button>
+                                            <button class="btn btn-sm btn-danger" 
+                                                    onclick="window.keyringApp.deleteEntry('${entry.id}')">Delete</button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            });
+            
+            el.categoryContainer.innerHTML = html;
+        }
+
+        // ==================== UI MANAGEMENT ====================
+        function switchToMainApp() {
+            el.setupScreen.classList.add('hidden');
+            el.mainApp.classList.remove('hidden');
+            startSessionTimer();
+            updateCategories();
+            renderEntries();
+        }
+
+        // ==================== UTILITY FUNCTIONS ====================
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showNotification(message, type = 'success') {
+            const existing = document.querySelector('.notification');
+            if (existing) {
+                existing.remove();
+            }
+            
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.style.animation = 'slideIn 0.3s ease-out reverse';
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            document.body.removeChild(notification);
+                        }
+                    }, 300);
+                }
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

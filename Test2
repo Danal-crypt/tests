@@ -1,0 +1,32 @@
+| tstats latest(_time) as lastTime
+  where index=$index$ sourcetype=$sourcetype$ (host=$host$ OR "$view$"="st")
+  earliest=-90d@d latest=now
+  by index sourcetype host
+| eval view="$view$"
+| eval host=if(view="st","*",host)
+| stats max(lastTime) as lastTime by index sourcetype host
+| eval ageSec = now() - lastTime
+| eval thresholdSec = tonumber("$thresholdHours$")*3600
+| where ageSec > thresholdSec
+| eval key=index."|".sourcetype."|".host
+
+| join type=left key [
+    | tstats count as dayCount
+      where index=$index$ sourcetype=$sourcetype$ (host=$host$ OR "$view$"="st")
+      earliest=-7d@d latest=now
+      by index sourcetype host _time span=1d
+    | eval view="$view$"
+    | eval host=if(view="st","*",host)
+    | stats
+        sum(dayCount) as weekCount
+        sum(eval(if(_time>=relative_time(now(),"@d"), dayCount, 0))) as todayCount
+        sum(eval(if(_time>=relative_time(now(),"-1d@d") AND _time<relative_time(now(),"@d"), dayCount, 0))) as yesterdayCount
+      by index sourcetype host
+    | eval key=index."|".sourcetype."|".host
+    | fields key todayCount yesterdayCount weekCount
+]
+
+| eval lastSeen=strftime(lastTime, "%F %T")
+| fillnull value=0 todayCount yesterdayCount weekCount
+| table index sourcetype host lastSeen ageSec thresholdSec todayCount yesterdayCount weekCount
+| sort - ageSec

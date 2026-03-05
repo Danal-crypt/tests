@@ -11,7 +11,7 @@ EXCLUDE_DIRS=(
 HOSTNAME="$(hostname -f 2>/dev/null || hostname)"
 TS="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-# Build prune expression
+# Build prune expression for find
 prune_expr=()
 for d in "${EXCLUDE_DIRS[@]}"; do
   prune_expr+=( -path "$d" -o )
@@ -22,8 +22,7 @@ emit_json() {
   local file="$1" readable="$2" error="$3"
   local size_bytes="$4" mtime_raw="$5" perms="$6" uid="$7" gid="$8" owner="$9" group="${10}" sha256="${11}"
 
-  python3 - "$file" "$HOSTNAME" "$TS" "$readable" "$error" \
-          "$size_bytes" "$mtime_raw" "$perms" "$uid" "$gid" "$owner" "$group" "$sha256" <<'PY'
+  python3 -c '
 import json, sys
 
 path = sys.argv[1]
@@ -63,12 +62,13 @@ event = {
   "sha256": sha256,
 }
 
-# stdin contains the file contents when readable
+# stdin is the file contents (because we are NOT using a heredoc)
 if readable:
-  event["conf_contents"] = sys.stdin.read()
+    event["conf_contents"] = sys.stdin.read()
 
 print(json.dumps(event, ensure_ascii=False, separators=(",", ":")))
-PY
+' "$file" "$HOSTNAME" "$TS" "$readable" "$error" \
+    "$size_bytes" "$mtime_raw" "$perms" "$uid" "$gid" "$owner" "$group" "$sha256"
 }
 
 find "$BASE_DIR" \
@@ -87,14 +87,15 @@ find "$BASE_DIR" \
       group="$(stat -c '%G' -- "$file" 2>/dev/null || echo "")"
 
       if [[ ! -r "$file" ]]; then
+        # No contents; pass empty stdin
         emit_json "$file" "false" "permission_denied" \
           "$size_bytes" "$mtime_raw" "$perms" "$uid" "$gid" "$owner" "$group" "" < /dev/null
         continue
       fi
 
-      sha256="$(sha256sum -- "$file" 2>/dev/null | awk '{print $1}' || echo "")"
+      sha256="$(sha256sum -- "$file" 2>/dev/null | awk "{print \$1}" || echo "")"
 
-      # Pipe file contents (NUL-stripped) into python so conf_contents is populated
+      # Pipe the actual file contents into python stdin (NUL stripped)
       tr -d '\000' < "$file" | emit_json "$file" "true" "" \
         "$size_bytes" "$mtime_raw" "$perms" "$uid" "$gid" "$owner" "$group" "$sha256"
     done

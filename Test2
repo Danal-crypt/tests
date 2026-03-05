@@ -18,85 +18,8 @@ for d in "${EXCLUDE_DIRS[@]}"; do
 done
 unset 'prune_expr[${#prune_expr[@]}-1]'
 
-find "$BASE_DIR" \
-  \( "${prune_expr[@]}" \) -prune -o \
-  -type f -name "*.conf" -print0 2>/dev/null \
-  | sort -z \
-  | while IFS= read -r -d '' file; do
+emit_json() {
+  local file="$1" readable="$2" error="$3"
+  local size_bytes="$4" mtime_raw="$5" perms="$6" uid="$7" gid="$8" owner="$9" group="${10}" sha256="${11}"
 
-      # Basic stat metadata via coreutils
-      # Note: %U/%G may return numeric if name can't be resolved; still accurate via uid/gid
-      size_bytes="$(stat -c '%s' -- "$file" 2>/dev/null || echo "")"
-      mtime_raw="$(stat -c '%y' -- "$file" 2>/dev/null || echo "")"
-      perms="$(stat -c '%a' -- "$file" 2>/dev/null || echo "")"
-      uid="$(stat -c '%u' -- "$file" 2>/dev/null || echo "")"
-      gid="$(stat -c '%g' -- "$file" 2>/dev/null || echo "")"
-      owner="$(stat -c '%U' -- "$file" 2>/dev/null || echo "")"
-      group="$(stat -c '%G' -- "$file" 2>/dev/null || echo "")"
-
-      readable=true
-      error=""
-      sha256=""
-      conf_contents=""
-
-      if [[ ! -r "$file" ]]; then
-        readable=false
-        error="permission_denied"
-      else
-        sha256="$(sha256sum -- "$file" 2>/dev/null | awk '{print $1}' || echo "")"
-        # Read the file contents (keep it as text; Splunk dashboards will render after unescaping \n)
-        # Replace NULs to avoid issues
-        conf_contents="$(tr -d '\000' < "$file" 2>/dev/null || echo "")"
-      fi
-
-      # Python used ONLY to JSON-escape and emit one-line JSON safely
-      python3 - "$file" "$HOSTNAME" "$TS" "$readable" "$error" \
-              "$size_bytes" "$mtime_raw" "$perms" "$uid" "$gid" "$owner" "$group" "$sha256" <<'PY'
-import json, sys
-
-# argv
-path = sys.argv[1]
-host = sys.argv[2]
-ts = sys.argv[3]
-readable = sys.argv[4].lower() == "true"
-error = sys.argv[5] or None
-size_bytes = sys.argv[6]
-mtime = sys.argv[7] or None
-perms = sys.argv[8] or None
-uid = sys.argv[9]
-gid = sys.argv[10]
-owner = sys.argv[11] or None
-group = sys.argv[12] or None
-sha256 = sys.argv[13] or None
-
-def to_int_or_none(s):
-    try:
-        return int(s)
-    except Exception:
-        return None
-
-# Read conf_contents from stdin so we don't fight shell quoting limits
-conf_contents = sys.stdin.read()
-
-event = {
-  "path": path,
-  "host": host,
-  "ts": ts,
-  "readable": readable,
-  "error": error,
-  "size_bytes": to_int_or_none(size_bytes),
-  "mtime": mtime,
-  "perms": perms,
-  "uid": to_int_or_none(uid),
-  "gid": to_int_or_none(gid),
-  "owner": owner,
-  "group": group,
-  "sha256": sha256,
-}
-
-if readable:
-  event["conf_contents"] = conf_contents
-
-print(json.dumps(event, ensure_ascii=False, separators=(",", ":")))
-PY
-    done
+  python3 - "$file" "$HOSTNAME" "$TS" "$readable

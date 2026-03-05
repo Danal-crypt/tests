@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE_DIR="/opt/splunk"
+
+# Exclude these directories and everything under them
+EXCLUDE_DIRS=(
+  "/opt/splunk/etc/default"
+  "/opt/splunk/var"
+)
+
+HOSTNAME="$(hostname -f 2>/dev/null || hostname)"
+RUN_TS="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+EPOCH="$(date +%s)"
+
+# Build prune expression for find: ( -path dir1 -o -path dir2 ) -prune -o ...
+prune_expr=()
+for d in "${EXCLUDE_DIRS[@]}"; do
+  prune_expr+=( -path "$d" -o )
+done
+unset 'prune_expr[${#prune_expr[@]}-1]'
+
+find "$BASE_DIR" \
+  \( "${prune_expr[@]}" \) -prune -o \
+  -type f -name "*.conf" -print0 2>/dev/null \
+  | sort -z \
+  | while IFS= read -r -d '' file; do
+      python3 - "$file" "$HOSTNAME" "$EPOCH" "$RUN_TS" <<'PY'
+import json, sys, os, hashlib
+
+path, host, epoch, ts = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
+
+event = {
+  "path": path,
+  "host": host,
+  "epoch": epoch,
+  "ts": ts,
+}
+
+# Collect stat metadata (best-effort)
+try:
+  st = os.stat(path, follow_symlinks=True)
+  event["size_bytes"] = st.st_size
+  # Human-readable mtime with local offset (matches your earlier preference)
+  # If you prefer UTC, say so and I’ll switch it.
+  import datetime
+  event["mtime"] = datetime.datetime.fromtimestamp(st.st_mtime).astimezone().isoformat()
+except Exception as e:
+  event["size_bytes"] = None
+  event["mtime"] = None
+  event["readable"] = False
+  event["error"] = f"stat_failed:{type(e).__name__}"
+  print(json.dumps(event, ensure_ascii=False, separators=(",", ":")))
+  sys.exit(0)
+
+# Owner/group/perms (best-effort, may be None in some environments)
+try:
+  import pwd, grp
+  event["owner"] = pwd.getpwuid(st.st_uid).pw_name
+  event["group"] = grp.getgrgid(st.st_gid).gr_name
+except Exception:
+  event["owner"] = None
+  event["group"] = None
+
+event["perms"] = oct(st.st_mode & 0o777)[2:]
+
+# Read file + sha256 (if permitted)
+try:
+  with open(path, "rb") as f:
+    data = f.read()
+  event["sha256"] = hashlib.sha256(data).hexdigest()
+  # Decode to text for dashboards; preserve exact bytes best-effort
+  event["conf_contents"] = data.decode("utf-8", errors="replace")
+  event["readable"] = True
+except PermissionError:
+  event["readable"] = False
+  event["error"] = "permission_denied"
+  event["sha256"] = None
+except Exception as e:
+  event["readable"] = False
+  event["error"] = f"read_failed:{type(e).__name__}"
+  event["sha256"] = None
+
+# One line JSON per file (Splunk -> 1 event per file)
+print(json.dumps(event, ensure_ascii=False, separators=(",", ":")))
+PY
+    done

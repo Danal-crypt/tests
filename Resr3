@@ -1,0 +1,25 @@
+| inputlookup missing_data_ignore
+| eval expire_epoch_num = tonumber(expire_epoch)
+| eval created_epoch_num = tonumber(created_epoch)
+
+| eval "Expiration Date" = case(
+    isnull(expire_epoch_num) OR expire_epoch_num=0, "Permanent",
+    true(), strftime(expire_epoch_num, "%F %T")
+)
+
+| eval Active = case(
+    isnull(expire_epoch_num) OR expire_epoch_num=0, "Active",
+    now() < expire_epoch_num, "Active",
+    true(), "Inactive"
+)
+
+| eval expires_in = case(
+    isnull(expire_epoch_num) OR expire_epoch_num=0, "Never",
+    now() < expire_epoch_num, tostring(round((expire_epoch_num-now())/3600, 1)) . " hours",
+    true(), "Expired"
+)
+
+| eval "Creation Time" = if(isnull(created_epoch_num), null(), strftime(created_epoch_num, "%F %T"))
+
+| table ignore_key Active "Expiration Date" expires_in reason created_by "Creation Time"
+| sort 0 - Active "Expiration Date"

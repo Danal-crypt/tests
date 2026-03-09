@@ -1,0 +1,16 @@
+| rest /services/data/indexes
+| search disabled=0
+| rename title as index
+| fields index
+| append [
+    <your dashboard search that returns search_filter and allowed_index fields>
+    | eval combined=mvappend(search_filter, allowed_index)
+    | mvexpand combined
+    | rex field=combined max_match=0 "(?i)\bindex\s*=\s*(?<specified_index>[A-Za-z0-9_\-*]+)"
+    | mvexpand specified_index
+    | eval index=specified_index
+    | fields index
+]
+| stats count by index
+| where count=1
+| sort index

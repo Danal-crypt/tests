@@ -1,0 +1,205 @@
+<form version="1.0" theme="dark">
+  <label>Cribl Metrics Monitoring</label>
+  <description>Operational dashboard for Cribl internal metrics in Splunk metrics index</description>
+
+  <fieldset submitButton="false">
+    <input type="time" token="time_tok">
+      <label>Time Range</label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+
+    <input type="text" token="index_tok">
+      <label>Metrics Index</label>
+      <default>YOUR_METRICS_INDEX</default>
+    </input>
+
+    <input type="text" token="group_tok">
+      <label>Worker Group / event_source filter (optional)</label>
+      <default>*</default>
+    </input>
+
+    <input type="text" token="host_tok">
+      <label>Worker Host / event_host filter (optional)</label>
+      <default>*</default>
+    </input>
+  </fieldset>
+
+  <row>
+    <panel>
+      <single>
+        <title>Incoming Events/sec</title>
+        <search>
+          <query>
+| mstats sum(_value) as eps WHERE index=$index_tok$ metric_name="cribl.logstream.total.in_events" event_source=$group_tok$ event_host=$host_tok$ span=1m earliest=$time_tok.earliest$ latest=$time_tok.latest$
+| eval eps=round(eps/60,2)
+| tail 1
+          </query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+
+    <panel>
+      <single>
+        <title>Outgoing Events/sec</title>
+        <search>
+          <query>
+| mstats sum(_value) as eps WHERE index=$index_tok$ metric_name="cribl.logstream.total.out_events" event_source=$group_tok$ event_host=$host_tok$ span=1m earliest=$time_tok.earliest$ latest=$time_tok.latest$
+| eval eps=round(eps/60,2)
+| tail 1
+          </query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+
+    <panel>
+      <single>
+        <title>Incoming MB/sec</title>
+        <search>
+          <query>
+| mstats sum(_value) as bps WHERE index=$index_tok$ metric_name="cribl.logstream.total.in_bytes" event_source=$group_tok$ event_host=$host_tok$ span=1m earliest=$time_tok.earliest$ latest=$time_tok.latest$
+| eval mbps=round((bps/60)/1024/1024,2)
+| tail 1
+| fields mbps
+          </query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+
+    <panel>
+      <single>
+        <title>Dropped Events</title>
+        <search>
+          <query>
+| mstats sum(_value) as dropped WHERE index=$index_tok$ metric_name="cribl.logstream.total.dropped_events" event_source=$group_tok$ event_host=$host_tok$ span=5m earliest=$time_tok.earliest$ latest=$time_tok.latest$
+| fillnull value=0 dropped
+| tail 1
+          </query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <chart>
+        <title>Events In vs Out Over Time</title>
+        <search>
+          <query>
+| mstats sum(_value) as value WHERE index=$index_tok$ metric_name IN ("cribl.logstream.total.in_events","cribl.logstream.total.out_events") event_source=$group_tok$ event_host=$host_tok$ span=5m earliest=$time_tok.earliest$ latest=$time_tok.latest$ BY metric_name
+| eval series=case(metric_name="cribl.logstream.total.in_events","In Events", metric_name="cribl.logstream.total.out_events","Out Events")
+| timechart span=5m sum(value) by series
+          </query>
+        </search>
+        <option name="charting.chart">line</option>
+      </chart>
+    </panel>
+
+    <panel>
+      <chart>
+        <title>Bytes In vs Out Over Time</title>
+        <search>
+          <query>
+| mstats sum(_value) as value WHERE index=$index_tok$ metric_name IN ("cribl.logstream.total.in_bytes","cribl.logstream.total.out_bytes") event_source=$group_tok$ event_host=$host_tok$ span=5m earliest=$time_tok.earliest$ latest=$time_tok.latest$ BY metric_name
+| eval MB=round(value/1024/1024,2)
+| eval series=case(metric_name="cribl.logstream.total.in_bytes","In MB", metric_name="cribl.logstream.total.out_bytes","Out MB")
+| timechart span=5m sum(MB) by series
+          </query>
+        </search>
+        <option name="charting.chart">line</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <chart>
+        <title>Dropped Events Trend</title>
+        <search>
+          <query>
+| mstats sum(_value) as dropped WHERE index=$index_tok$ metric_name="cribl.logstream.total.dropped_events" event_source=$group_tok$ event_host=$host_tok$ span=5m earliest=$time_tok.earliest$ latest=$time_tok.latest$
+| timechart span=5m sum(dropped) as dropped
+| fillnull value=0 dropped
+          </query>
+        </search>
+        <option name="charting.chart">column</option>
+      </chart>
+    </panel>
+
+    <panel>
+      <table>
+        <title>Top Worker Hosts by Incoming Events</title>
+        <search>
+          <query>
+| mstats sum(_value) as in_events WHERE index=$index_tok$ metric_name="cribl.logstream.total.in_events" event_source=$group_tok$ event_host=$host_tok$ earliest=$time_tok.earliest$ latest=$time_tok.latest$ BY event_host
+| sort - in_events
+| head 15
+          </query>
+        </search>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Top Sources by Incoming Events</title>
+        <search>
+          <query>
+| mstats sum(_value) as in_events WHERE index=$index_tok$ metric_name="cribl.logstream.source.in_events" event_source=$group_tok$ event_host=$host_tok$ earliest=$time_tok.earliest$ latest=$time_tok.latest$ BY source
+| sort - in_events
+| head 20
+          </query>
+        </search>
+      </table>
+    </panel>
+
+    <panel>
+      <table>
+        <title>Top Sourcetypes by Incoming Events</title>
+        <search>
+          <query>
+| mstats sum(_value) as in_events WHERE index=$index_tok$ metric_name="cribl.logstream.sourcetype.in_events" event_source=$group_tok$ event_host=$host_tok$ earliest=$time_tok.earliest$ latest=$time_tok.latest$ BY sourcetype
+| sort - in_events
+| head 20
+          </query>
+        </search>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Top Destinations by Outgoing Events</title>
+        <search>
+          <query>
+| mstats sum(_value) as out_events WHERE index=$index_tok$ metric_name="cribl.logstream.output.out_events" event_source=$group_tok$ event_host=$host_tok$ earliest=$time_tok.earliest$ latest=$time_tok.latest$ BY output
+| sort - out_events
+| head 20
+          </query>
+        </search>
+      </table>
+    </panel>
+
+    <panel>
+      <table>
+        <title>Destination Drops / Backpressure Watch</title>
+        <search>
+          <query>
+| mstats sum(_value) as dropped WHERE index=$index_tok$ metric_name="cribl.logstream.output.dropped_events" event_source=$group_tok$ event_host=$host_tok$ earliest=$time_tok.earliest$ latest=$time_tok.latest$ BY output
+| fillnull value=0 dropped
+| sort - dropped
+| head 20
+          </query>
+        </search>
+      </table>
+    </panel>
+  </row>
+</form>

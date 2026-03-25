@@ -15,8 +15,6 @@ ETCD_PASS="pass"
 ETCD_PORT="2379"
 COMMAND_TIMEOUT="20s"
 
-export ETCDCTL_API=3
-
 ETCDCTL_BIN="${ETCD_DIR}/etcdctl"
 
 emit_error_json() {
@@ -205,55 +203,57 @@ if health_err:
     event["notable"].append("health_parse_failed")
     event["health_error"] = health_err
 else:
-    event["health"] = normalize_bool(h.get("health", h.get("Health")))
-    event["health_took"] = h.get("took", h.get("Took", ""))
-    event["health_error"] = h.get("error", h.get("Error", ""))
+    event["health"] = normalize_bool(h.get("Health", h.get("health")))
+    event["health_took"] = h.get("Took", h.get("took", ""))
+    event["health_error"] = h.get("Error", h.get("error", ""))
+
+# fallback if health JSON isn't clean but text still contains it
+if event["health"] is None and event["health_error"] == "":
+    hr = health_raw.lower()
+    if '"health":true' in hr or '"health": true' in hr:
+        event["health"] = True
+    elif '"health":false' in hr or '"health": false' in hr:
+        event["health"] = False
 
 if status_err:
     event["notable"].append("status_parse_failed")
     if not event["health_error"]:
         event["health_error"] = status_err
 else:
-    st = s.get("Status", s.get("status", {}))
-    if not isinstance(st, dict):
-        st = {}
+    status_obj = s.get("Status", s.get("status", {}))
+    if not isinstance(status_obj, dict):
+        status_obj = {}
 
-    header = st.get("header", st.get("Header", {}))
+    header = status_obj.get("header", status_obj.get("Header", {}))
     if not isinstance(header, dict):
         header = {}
 
     event["version"] = (
-        s.get("Version")
+        status_obj.get("version")
+        or status_obj.get("Version")
         or s.get("version")
-        or st.get("version")
-        or st.get("Version")
+        or s.get("Version")
         or ""
     )
 
-    event["cluster_id"] = str(
-        header.get("cluster_id", header.get("clusterId", ""))
-        or ""
-    )
+    event["cluster_id"] = str(header.get("cluster_id", header.get("clusterId", "")) or "")
+    event["member_id"] = str(header.get("member_id", header.get("memberId", "")) or "")
     event["revision"] = to_int(header.get("revision", header.get("Revision")))
 
-    event["member_id"] = str(
-        st.get("member_id", st.get("memberId", ""))
-        or ""
-    )
     event["leader_id"] = str(
-        st.get("leader", st.get("leader_id", st.get("leaderId", "")))
+        status_obj.get("leader", status_obj.get("leader_id", status_obj.get("leaderId", "")))
         or ""
     )
 
     if event["member_id"] != "" and event["leader_id"] != "":
         event["is_leader"] = (event["member_id"] == event["leader_id"])
 
-    event["is_learner"] = normalize_bool(st.get("isLearner", st.get("is_learner")))
-    event["db_size_bytes"] = to_int(st.get("dbSize", st.get("db_size")))
-    event["db_size_in_use_bytes"] = to_int(st.get("dbSizeInUse", st.get("db_size_in_use")))
-    event["raft_term"] = to_int(st.get("raftTerm", st.get("raft_term")))
-    event["raft_index"] = to_int(st.get("raftIndex", st.get("raft_index")))
-    event["raft_applied_index"] = to_int(st.get("raftAppliedIndex", st.get("raft_applied_index")))
+    event["is_learner"] = normalize_bool(status_obj.get("isLearner", status_obj.get("is_learner")))
+    event["db_size_bytes"] = to_int(status_obj.get("dbSize", status_obj.get("db_size")))
+    event["db_size_in_use_bytes"] = to_int(status_obj.get("dbSizeInUse", status_obj.get("db_size_in_use")))
+    event["raft_term"] = to_int(status_obj.get("raftTerm", status_obj.get("raft_term", header.get("raft_term"))))
+    event["raft_index"] = to_int(status_obj.get("raftIndex", status_obj.get("raft_index")))
+    event["raft_applied_index"] = to_int(status_obj.get("raftAppliedIndex", status_obj.get("raft_applied_index")))
 
     errs = s.get("Errors", s.get("errors", []))
     if isinstance(errs, list):
@@ -263,13 +263,6 @@ else:
 
     if event["db_size_bytes"] and event["db_size_in_use_bytes"] is not None and event["db_size_bytes"] > 0:
         event["db_size_in_use_pct"] = round((event["db_size_in_use_bytes"] / event["db_size_bytes"]) * 100, 2)
-
-if event["health"] is None and event["health_error"] == "":
-    hr = health_raw.lower()
-    if '"health":true' in hr or '"health": true' in hr:
-        event["health"] = True
-    elif '"health":false' in hr or '"health": false' in hr:
-        event["health"] = False
 
 member_id_lower = event["member_id"].lower()
 alarms = []

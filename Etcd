@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ETCD_DIR="/opt/etcd-v3.6.5"
+BACKUP_DIR="/opt/etcd-v3.6.5/backups"
+
+CACERT="/opt/splunk/etc/apps/splunk_app_db_connect/cert.pem"
+CERT="/opt/splunk/etc/apps/splunk_app_db_connect/cert.pem"
+KEY="/opt/splunk/etc/apps/splunk_app_db_connect/key.key"
+
+ETCD_USER="user"
+ETCD_PASS="pass"
+
+ETCD_PORT="2379"
+COMMAND_TIMEOUT="20s"
+KEEP_BACKUPS=10
+
+export ETCDCTL_API=3
+
+ETCDCTL_BIN="${ETCD_DIR}/etcdctl"
+
+if [[ ! -x "$ETCDCTL_BIN" ]]; then
+    echo "ERROR: etcdctl not found or not executable at $ETCDCTL_BIN"
+    exit 1
+fi
+
+mkdir -p "$BACKUP_DIR"
+
+HOST_IP="$(
+    hostname -I | tr ' ' '\n' | awk '/^10\./ {print; exit}'
+)"
+
+if [[ -z "$HOST_IP" ]]; then
+    echo "ERROR: No IP starting with 10. was found from hostname -I"
+    exit 1
+fi
+
+ENDPOINT="https://${HOST_IP}:${ETCD_PORT}"
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+BACKUP_FILE="${BACKUP_DIR}/backup_db_${TIMESTAMP}.db"
+
+echo "Using endpoint: $ENDPOINT"
+echo "Backup file: $BACKUP_FILE"
+
+"$ETCDCTL_BIN" \
+  --endpoints="$ENDPOINT" \
+  --cacert="$CACERT" \
+  --cert="$CERT" \
+  --key="$KEY" \
+  --user="${ETCD_USER}:${ETCD_PASS}" \
+  snapshot save "$BACKUP_FILE" \
+  --command-timeout="$COMMAND_TIMEOUT"
+
+if [[ ! -s "$BACKUP_FILE" ]]; then
+    echo "ERROR: Backup file was not created or is empty: $BACKUP_FILE"
+    exit 1
+fi
+
+echo "Snapshot backup completed successfully."
+
+echo "Pruning old backups, keeping newest ${KEEP_BACKUPS}..."
+
+mapfile -t OLD_BACKUPS < <(
+    find "$BACKUP_DIR" -maxdepth 1 -type f -name 'backup_db_*.db' -printf '%T@ %p\n' \
+    | sort -nr \
+    | awk "NR>${KEEP_BACKUPS} {print \$2}"
+)
+
+if (( ${#OLD_BACKUPS[@]} > 0 )); then
+    printf '%s\n' "${OLD_BACKUPS[@]}" | xargs -r rm -f --
+    echo "Removed $(( ${#OLD_BACKUPS[@]} )) old backup(s)."
+else
+    echo "No old backups needed removal."
+fi
+
+REVISION="$(
+"$ETCDCTL_BIN" \
+  --endpoints="$ENDPOINT" \
+  --cacert="$CACERT" \
+  --cert="$CERT" \
+  --key="$KEY" \
+  --user="${ETCD_USER}:${ETCD_PASS}" \
+  endpoint status --write-out=json | python3 -c '
+import sys, json
+data = json.load(sys.stdin)
+print(data[0]["Status"]["header"]["revision"])
+'
+)"
+
+if [[ -z "$REVISION" ]]; then
+    echo "ERROR: Failed to determine etcd revision for compact"
+    exit 1
+fi
+
+echo "Compacting etcd at revision: $REVISION"
+
+"$ETCDCTL_BIN" \
+  --endpoints="$ENDPOINT" \
+  --cacert="$CACERT" \
+  --cert="$CERT" \
+  --key="$KEY" \
+  --user="${ETCD_USER}:${ETCD_PASS}" \
+  compact "$REVISION" \
+  --command-timeout="$COMMAND_TIMEOUT"
+
+echo "Compact completed successfully."
+
+echo "Running defrag..."
+
+"$ETCDCTL_BIN" \
+  --endpoints="$ENDPOINT" \
+  --cacert="$CACERT" \
+  --cert="$CERT" \
+  --key="$KEY" \
+  --user="${ETCD_USER}:${ETCD_PASS}" \
+  defrag \
+  --command-timeout="$COMMAND_TIMEOUT"
+
+echo "Defrag completed successfully."
+echo "All maintenance tasks completed."

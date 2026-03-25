@@ -1,0 +1,302 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ETCD_DIR="/opt/etcd-v3.6.5"
+BACKUP_DIR="/opt/etcd-v3.6.5/backups"
+
+CACERT="/opt/splunk/etc/apps/splunk_app_db_connect/cert.pem"
+CERT="/opt/splunk/etc/apps/splunk_app_db_connect/cert.pem"
+KEY="/opt/splunk/etc/apps/splunk_app_db_connect/key.key"
+
+ETCD_USER="user"
+ETCD_PASS="pass"
+
+ETCD_PORT="2379"
+COMMAND_TIMEOUT="20s"
+
+export ETCDCTL_API=3
+
+ETCDCTL_BIN="${ETCD_DIR}/etcdctl"
+
+if [[ ! -x "$ETCDCTL_BIN" ]]; then
+    python3 - <<'PY'
+import json, socket, time
+print(json.dumps({
+    "event_type": "etcd_node_check",
+    "severity": "critical",
+    "status": "error",
+    "check_host": socket.gethostname(),
+    "error": "etcdctl not found or not executable",
+    "timestamp_epoch": int(time.time())
+}))
+PY
+    exit 1
+fi
+
+LOCAL_HOSTNAME="$(hostname -s 2>/dev/null || hostname)"
+
+LOCAL_IP="$(
+    hostname -I 2>/dev/null | tr ' ' '\n' | awk '/^10\./ {print; exit}'
+)"
+
+if [[ -z "$LOCAL_IP" ]]; then
+    python3 - <<'PY'
+import json, socket, time
+print(json.dumps({
+    "event_type": "etcd_node_check",
+    "severity": "critical",
+    "status": "error",
+    "check_host": socket.gethostname(),
+    "error": "no 10.x IP found from hostname -I",
+    "timestamp_epoch": int(time.time())
+}))
+PY
+    exit 1
+fi
+
+ENDPOINT="https://${LOCAL_IP}:${ETCD_PORT}"
+NOW_EPOCH="$(date +%s)"
+
+LATEST_BACKUP_FILE=""
+LATEST_BACKUP_EPOCH=""
+LATEST_BACKUP_AGE_SEC=""
+LATEST_BACKUP_SIZE_BYTES=""
+
+if [[ -d "$BACKUP_DIR" ]]; then
+    LATEST_BACKUP_FILE="$(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'backup_db_*.db' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | awk '{print $2}')"
+    if [[ -n "$LATEST_BACKUP_FILE" && -f "$LATEST_BACKUP_FILE" ]]; then
+        LATEST_BACKUP_EPOCH="$(stat -c %Y "$LATEST_BACKUP_FILE" 2>/dev/null || true)"
+        LATEST_BACKUP_SIZE_BYTES="$(stat -c %s "$LATEST_BACKUP_FILE" 2>/dev/null || true)"
+        if [[ -n "$LATEST_BACKUP_EPOCH" ]]; then
+            LATEST_BACKUP_AGE_SEC="$((NOW_EPOCH - LATEST_BACKUP_EPOCH))"
+        fi
+    fi
+fi
+
+HEALTH_JSON="$("$ETCDCTL_BIN" \
+  --endpoints="$ENDPOINT" \
+  --cacert="$CACERT" \
+  --cert="$CERT" \
+  --key="$KEY" \
+  --user="${ETCD_USER}:${ETCD_PASS}" \
+  --command-timeout="$COMMAND_TIMEOUT" \
+  endpoint health -w json 2>&1 || true)"
+
+STATUS_JSON="$("$ETCDCTL_BIN" \
+  --endpoints="$ENDPOINT" \
+  --cacert="$CACERT" \
+  --cert="$CERT" \
+  --key="$KEY" \
+  --user="${ETCD_USER}:${ETCD_PASS}" \
+  --command-timeout="$COMMAND_TIMEOUT" \
+  endpoint status -w json 2>&1 || true)"
+
+ALARM_TEXT="$("$ETCDCTL_BIN" \
+  --endpoints="$ENDPOINT" \
+  --cacert="$CACERT" \
+  --cert="$CERT" \
+  --key="$KEY" \
+  --user="${ETCD_USER}:${ETCD_PASS}" \
+  --command-timeout="$COMMAND_TIMEOUT" \
+  alarm list 2>&1 || true)"
+
+export LOCAL_HOSTNAME LOCAL_IP ENDPOINT NOW_EPOCH
+export LATEST_BACKUP_FILE LATEST_BACKUP_EPOCH LATEST_BACKUP_AGE_SEC LATEST_BACKUP_SIZE_BYTES
+export HEALTH_JSON STATUS_JSON ALARM_TEXT
+
+python3 - <<'PY'
+import os
+import json
+import re
+
+def parse_json_maybe(raw):
+    raw = (raw or "").strip()
+    if not raw:
+        return None, "empty output"
+    try:
+        return json.loads(raw), None
+    except Exception as e:
+        return None, f"json_parse_failed: {e}; raw={raw[:800]}"
+
+local_hostname = os.environ.get("LOCAL_HOSTNAME", "unknown")
+local_ip = os.environ.get("LOCAL_IP", "unknown")
+endpoint = os.environ.get("ENDPOINT", "")
+now_epoch = int(os.environ.get("NOW_EPOCH", "0") or 0)
+
+latest_backup_file = os.environ.get("LATEST_BACKUP_FILE", "")
+latest_backup_epoch = os.environ.get("LATEST_BACKUP_EPOCH", "")
+latest_backup_age_sec = os.environ.get("LATEST_BACKUP_AGE_SEC", "")
+latest_backup_size_bytes = os.environ.get("LATEST_BACKUP_SIZE_BYTES", "")
+
+health_raw = os.environ.get("HEALTH_JSON", "")
+status_raw = os.environ.get("STATUS_JSON", "")
+alarm_text = os.environ.get("ALARM_TEXT", "")
+
+health_data, health_err = parse_json_maybe(health_raw)
+status_data, status_err = parse_json_maybe(status_raw)
+
+event = {
+    "event_type": "etcd_node_check",
+    "status": "ok",
+    "severity": "info",
+    "check_host": local_hostname,
+    "check_ip": local_ip,
+    "endpoint": endpoint,
+    "timestamp_epoch": now_epoch,
+    "health": None,
+    "health_took": "",
+    "health_error": "",
+    "version": "",
+    "cluster_id": "",
+    "member_id": "",
+    "leader_id": "",
+    "is_leader": None,
+    "is_learner": None,
+    "revision": None,
+    "db_size_bytes": None,
+    "db_size_in_use_bytes": None,
+    "db_size_in_use_pct": None,
+    "raft_term": None,
+    "raft_index": None,
+    "raft_applied_index": None,
+    "status_errors": [],
+    "has_alarm": False,
+    "alarms": [],
+    "latest_backup_file": latest_backup_file,
+    "latest_backup_epoch": int(latest_backup_epoch) if str(latest_backup_epoch).isdigit() else None,
+    "latest_backup_age_sec": int(latest_backup_age_sec) if str(latest_backup_age_sec).isdigit() else None,
+    "latest_backup_size_bytes": int(latest_backup_size_bytes) if str(latest_backup_size_bytes).isdigit() else None,
+    "notable": []
+}
+
+if health_err:
+    event["status"] = "error"
+    event["severity"] = "critical"
+    event["health_error"] = health_err
+    event["notable"].append("health_parse_failed")
+else:
+    h = None
+    if isinstance(health_data, list) and health_data:
+        h = health_data[0]
+    elif isinstance(health_data, dict):
+        h = health_data
+
+    if isinstance(h, dict):
+        event["health"] = h.get("Health")
+        event["health_took"] = h.get("Took", "")
+        event["health_error"] = h.get("Error", "")
+
+if status_err:
+    event["status"] = "error"
+    event["severity"] = "critical"
+    if not event["health_error"]:
+        event["health_error"] = status_err
+    event["notable"].append("status_parse_failed")
+else:
+    s = None
+    if isinstance(status_data, list) and status_data:
+        s = status_data[0]
+    elif isinstance(status_data, dict):
+        s = status_data
+
+    if isinstance(s, dict):
+        event["version"] = s.get("Version", "")
+        st = s.get("Status", {}) if isinstance(s.get("Status", {}), dict) else {}
+        header = st.get("header", {}) if isinstance(st.get("header", {}), dict) else {}
+
+        event["cluster_id"] = str(header.get("cluster_id", "")) if header.get("cluster_id") is not None else ""
+        event["revision"] = header.get("revision")
+
+        event["member_id"] = str(st.get("member_id", "")) if st.get("member_id") is not None else ""
+        event["leader_id"] = str(st.get("leader", "")) if st.get("leader") is not None else ""
+
+        if event["member_id"] and event["leader_id"]:
+            event["is_leader"] = (event["member_id"] == event["leader_id"])
+
+        event["is_learner"] = st.get("isLearner")
+        event["db_size_bytes"] = st.get("dbSize")
+        event["db_size_in_use_bytes"] = st.get("dbSizeInUse")
+        event["raft_term"] = st.get("raftTerm")
+        event["raft_index"] = st.get("raftIndex")
+        event["raft_applied_index"] = st.get("raftAppliedIndex")
+
+        errs = s.get("Errors", [])
+        if isinstance(errs, list):
+            event["status_errors"] = errs
+        elif errs:
+            event["status_errors"] = [str(errs)]
+
+        try:
+            db_size = int(event["db_size_bytes"]) if event["db_size_bytes"] is not None else 0
+            db_in_use = int(event["db_size_in_use_bytes"]) if event["db_size_in_use_bytes"] is not None else 0
+            if db_size > 0:
+                event["db_size_in_use_pct"] = round((db_in_use / db_size) * 100, 2)
+        except Exception:
+            pass
+
+member_id_lower = str(event["member_id"]).lower()
+alarms = []
+
+for line in (alarm_text or "").splitlines():
+    line = line.strip()
+    if not line:
+        continue
+    m = re.search(r'memberID:([0-9a-fx]+)\s+alarm:([A-Z_]+)', line, re.I)
+    if m:
+        alarm_member = m.group(1).lower()
+        alarm_name = m.group(2)
+        if member_id_lower and alarm_member == member_id_lower:
+            alarms.append(alarm_name)
+
+event["alarms"] = alarms
+event["has_alarm"] = len(alarms) > 0
+
+if event["health"] is False:
+    event["severity"] = "critical"
+    event["notable"].append("endpoint_unhealthy")
+
+if event["health_error"]:
+    if event["severity"] != "critical":
+        event["severity"] = "high"
+    if "health_error_present" not in event["notable"]:
+        event["notable"].append("health_error_present")
+
+if event["status_errors"]:
+    if event["severity"] not in ("critical",):
+        event["severity"] = "high"
+    event["notable"].append("status_errors_present")
+
+if event["has_alarm"]:
+    if event["severity"] not in ("critical",):
+        event["severity"] = "high"
+    event["notable"].append("alarms_present")
+
+try:
+    if event["db_size_in_use_pct"] is not None and float(event["db_size_in_use_pct"]) >= 85:
+        if event["severity"] == "info":
+            event["severity"] = "medium"
+        event["notable"].append("db_space_high")
+except Exception:
+    pass
+
+if event["latest_backup_age_sec"] is None:
+    if event["severity"] == "info":
+        event["severity"] = "medium"
+    event["notable"].append("backup_missing")
+else:
+    try:
+        if int(event["latest_backup_age_sec"]) > 86400:
+            if event["severity"] == "info":
+                event["severity"] = "medium"
+            event["notable"].append("backup_older_than_1d")
+    except Exception:
+        pass
+
+if event["status"] != "error" and event["health"] is None and event["revision"] is None:
+    event["status"] = "error"
+    event["severity"] = "critical"
+    event["notable"].append("no_valid_etcd_data_returned")
+
+print(json.dumps(event, separators=(",", ":")))
+PY

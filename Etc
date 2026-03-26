@@ -1,0 +1,277 @@
+<row>
+  <panel>
+    <html>
+      <h2>Glossary and Monitoring Purpose</h2>
+      <table class="table table-striped table-bordered">
+        <thead>
+          <tr>
+            <th>Field / Term</th>
+            <th>What it means</th>
+            <th>Why it is monitored</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>check_host</td>
+            <td>The hostname of the node that ran the health check script.</td>
+            <td>Lets you identify which etcd member produced the event and detect if a node stops reporting entirely.</td>
+          </tr>
+          <tr>
+            <td>check_ip</td>
+            <td>The local 10.x IP address the script used to query the node’s own etcd endpoint.</td>
+            <td>Helps verify the script is pointing at the intended local interface and makes endpoint mapping easier during troubleshooting.</td>
+          </tr>
+          <tr>
+            <td>endpoint</td>
+            <td>The exact etcd endpoint queried by the script, usually the local member’s HTTPS listener.</td>
+            <td>Confirms which listener is being tested and helps catch IP or certificate mismatches.</td>
+          </tr>
+          <tr>
+            <td>status</td>
+            <td>The overall result of the script, such as <code>ok</code> or <code>error</code>.</td>
+            <td>Separates a healthy collection run from a script or parsing failure. A node can be unhealthy, but a script-level error means the check itself could not complete cleanly.</td>
+          </tr>
+          <tr>
+            <td>severity</td>
+            <td>The script’s normalized priority level for the event, such as <code>info</code>, <code>medium</code>, <code>high</code>, or <code>critical</code>.</td>
+            <td>Provides quick triage. It condenses multiple conditions into a single urgency signal for dashboards and alerts.</td>
+          </tr>
+          <tr>
+            <td>health</td>
+            <td>Whether etcd responded successfully to the local health check.</td>
+            <td>This is the most direct signal that the node’s etcd endpoint is functioning.</td>
+          </tr>
+          <tr>
+            <td>health_state</td>
+            <td>A normalized label such as <code>healthy</code>, <code>unhealthy</code>, or <code>unknown</code>.</td>
+            <td>Makes filtering and visualization easier than using raw booleans or null-like values.</td>
+          </tr>
+          <tr>
+            <td>health_took</td>
+            <td>How long the health check took to complete.</td>
+            <td>Useful for spotting latency increases before a node becomes fully unhealthy.</td>
+          </tr>
+          <tr>
+            <td>health_error</td>
+            <td>The error returned by the health check, if any.</td>
+            <td>Shows the likely reason for failure, such as timeouts, TLS issues, or connectivity problems.</td>
+          </tr>
+          <tr>
+            <td>version</td>
+            <td>The etcd version reported by the node.</td>
+            <td>Helps confirm version consistency across the cluster and can explain behavior differences during upgrades or troubleshooting.</td>
+          </tr>
+          <tr>
+            <td>cluster_id</td>
+            <td>The etcd cluster identifier.</td>
+            <td>Confirms that all nodes belong to the same intended cluster and helps catch split-brain or misjoined nodes.</td>
+          </tr>
+          <tr>
+            <td>member_id</td>
+            <td>The unique etcd member ID for this node.</td>
+            <td>Used to uniquely identify the member and compare it to the current leader ID.</td>
+          </tr>
+          <tr>
+            <td>leader_id</td>
+            <td>The member ID of the current Raft leader.</td>
+            <td>Lets you identify which node currently leads the cluster and helps diagnose leader changes or instability.</td>
+          </tr>
+          <tr>
+            <td>is_leader</td>
+            <td>Whether this node is the current leader.</td>
+            <td>Important because leadership changes can indicate elections, instability, or connectivity issues.</td>
+          </tr>
+          <tr>
+            <td>node_role</td>
+            <td>A normalized role label such as <code>leader</code> or <code>follower</code>.</td>
+            <td>Makes dashboards and filtering easier than relying only on boolean comparisons.</td>
+          </tr>
+          <tr>
+            <td>is_learner</td>
+            <td>Whether the member is a learner node instead of a full voting member.</td>
+            <td>Learners behave differently in replication and are important to identify during scaling or recovery operations.</td>
+          </tr>
+          <tr>
+            <td>revision</td>
+            <td>The current global key-value store revision.</td>
+            <td>Every write advances the revision. Comparing revisions across nodes can reveal lag, stale reporting, or replication issues.</td>
+          </tr>
+          <tr>
+            <td>raft_term</td>
+            <td>The current Raft election term.</td>
+            <td>When it increases, an election occurred. Frequent changes suggest instability, leader churn, or node communication problems.</td>
+          </tr>
+          <tr>
+            <td>raft_index</td>
+            <td>The highest Raft log index known by the node.</td>
+            <td>Shows how far the node has progressed in the replicated log.</td>
+          </tr>
+          <tr>
+            <td>raft_applied_index</td>
+            <td>The highest Raft log index the node has actually applied.</td>
+            <td>If it trails behind <code>raft_index</code>, the node may be lagging in applying committed updates.</td>
+          </tr>
+          <tr>
+            <td>quota_backend_bytes / quota_backend_mb</td>
+            <td>The configured etcd backend quota limit.</td>
+            <td>This is the actual storage ceiling that matters for NOSPACE risk and capacity planning.</td>
+          </tr>
+          <tr>
+            <td>db_size_bytes / db_size_mb</td>
+            <td>The current backend database file size on disk.</td>
+            <td>Shows the actual size of the local backend file, which helps track growth and the effect of compaction or defrag.</td>
+          </tr>
+          <tr>
+            <td>db_size_in_use_bytes / db_size_in_use_mb</td>
+            <td>The portion of the backend currently occupied by live data.</td>
+            <td>Shows how much of the backend contains active data rather than free or reclaimable space.</td>
+          </tr>
+          <tr>
+            <td>db_file_in_use_pct</td>
+            <td>The in-use portion of the current backend file as a percentage of the file size.</td>
+            <td>This is informational. It helps you understand file occupancy after compaction and defrag, but it does not represent quota exhaustion.</td>
+          </tr>
+          <tr>
+            <td>db_quota_used_pct</td>
+            <td>The total backend file size as a percentage of the configured quota.</td>
+            <td>Shows how much of the storage limit the backend file has consumed overall.</td>
+          </tr>
+          <tr>
+            <td>db_quota_in_use_pct</td>
+            <td>The live data portion as a percentage of the configured quota.</td>
+            <td>This is the main storage pressure metric used for severity and alerting, because it reflects actual quota risk.</td>
+          </tr>
+          <tr>
+            <td>db_space_state</td>
+            <td>A normalized capacity state such as <code>ok</code>, <code>warning</code>, <code>high</code>, or <code>critical</code>.</td>
+            <td>Makes quota risk easier to understand quickly and supports simple alert conditions.</td>
+          </tr>
+          <tr>
+            <td>has_alarm</td>
+            <td>Whether etcd reports an active alarm for this member.</td>
+            <td>Alarms often indicate serious conditions like NOSPACE and should be surfaced clearly.</td>
+          </tr>
+          <tr>
+            <td>alarm_count</td>
+            <td>The number of active alarms affecting the member.</td>
+            <td>Useful for quick summarization and alert thresholds.</td>
+          </tr>
+          <tr>
+            <td>alarms / alarms_text</td>
+            <td>The alarm names reported by etcd, both as an array and as a display string.</td>
+            <td>Shows exactly what etcd believes is wrong, which is essential for root cause analysis.</td>
+          </tr>
+          <tr>
+            <td>status_errors</td>
+            <td>Errors returned from the endpoint status query.</td>
+            <td>These can indicate communication problems, backend issues, or partial node failures even when some fields still populate.</td>
+          </tr>
+          <tr>
+            <td>status_errors_count</td>
+            <td>The number of status errors present.</td>
+            <td>Makes dashboards and simple threshold logic easier than parsing the raw array every time.</td>
+          </tr>
+          <tr>
+            <td>has_status_errors</td>
+            <td>Whether any status errors were returned.</td>
+            <td>Provides a quick yes/no issue indicator for filtering and alerting.</td>
+          </tr>
+          <tr>
+            <td>status_errors_text</td>
+            <td>A display-friendly string version of the status errors.</td>
+            <td>Useful for tables and dashboards so the operator can read the errors directly.</td>
+          </tr>
+          <tr>
+            <td>latest_backup_file</td>
+            <td>The newest local etcd snapshot backup file found by the script.</td>
+            <td>Confirms that backup creation is happening and identifies the specific file used for the latest backup state.</td>
+          </tr>
+          <tr>
+            <td>latest_backup_epoch</td>
+            <td>The file modification time of the newest backup in epoch format.</td>
+            <td>Provides a machine-friendly timestamp for backup freshness calculations.</td>
+          </tr>
+          <tr>
+            <td>latest_backup_age_sec / latest_backup_age_hr</td>
+            <td>How old the most recent local backup is.</td>
+            <td>Used to determine whether backups are fresh, stale, or missing.</td>
+          </tr>
+          <tr>
+            <td>latest_backup_size_bytes / latest_backup_size_mb</td>
+            <td>The size of the newest local backup file.</td>
+            <td>Helps verify the backup looks reasonable and can reveal suspiciously small or missing snapshots.</td>
+          </tr>
+          <tr>
+            <td>backup_state</td>
+            <td>A normalized backup status such as <code>ok</code>, <code>stale</code>, or <code>missing</code>.</td>
+            <td>Makes backup health easy to monitor and alert on without recalculating logic in SPL.</td>
+          </tr>
+          <tr>
+            <td>notable</td>
+            <td>A list of notable conditions found by the script.</td>
+            <td>Provides a compact explanation of why a node is interesting or in trouble.</td>
+          </tr>
+          <tr>
+            <td>notable_text</td>
+            <td>A display-friendly string version of the notable conditions.</td>
+            <td>Useful in tables and dashboards where arrays are harder to read.</td>
+          </tr>
+          <tr>
+            <td>is_issue</td>
+            <td>A script-generated overall issue flag.</td>
+            <td>Lets the dashboard and alerts identify problem events without repeating all the logic in SPL.</td>
+          </tr>
+          <tr>
+            <td>reporting_state</td>
+            <td>A dashboard-derived field based on how recently a node has sent data, such as <code>current</code>, <code>late</code>, or <code>stale</code>.</td>
+            <td>Important because a healthy cluster still has a problem if one node stops reporting health events.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Why these categories are monitored</h3>
+      <table class="table table-striped table-bordered">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Why it is monitored</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Node health</td>
+            <td>To confirm the local etcd member is reachable, responsive, and not already failing health checks.</td>
+          </tr>
+          <tr>
+            <td>Leadership and Raft state</td>
+            <td>To detect elections, instability, lag, and follower problems. These are often the earliest signs of cluster communication trouble.</td>
+          </tr>
+          <tr>
+            <td>Revision and replication progress</td>
+            <td>To see whether nodes are staying in sync and applying changes consistently.</td>
+          </tr>
+          <tr>
+            <td>Storage and quota usage</td>
+            <td>To prevent backend quota exhaustion and NOSPACE events, which can impact the whole cluster.</td>
+          </tr>
+          <tr>
+            <td>Alarms and status errors</td>
+            <td>To surface explicit etcd-reported problems instead of relying only on indirect symptoms.</td>
+          </tr>
+          <tr>
+            <td>Backup freshness</td>
+            <td>To ensure recoverability. A healthy node without usable backups is still an operational risk.</td>
+          </tr>
+          <tr>
+            <td>Reporting freshness</td>
+            <td>To catch nodes that stop sending telemetry. A missing health event can itself indicate a host, script, or etcd failure.</td>
+          </tr>
+          <tr>
+            <td>Overall issue flag and severity</td>
+            <td>To simplify triage and reduce the amount of SPL needed in dashboards and alerts.</td>
+          </tr>
+        </tbody>
+      </table>
+    </html>
+  </panel>
+</row>

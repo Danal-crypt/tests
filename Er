@@ -1,0 +1,338 @@
+<form version="1.1">
+  <label>etcd Node Health Overview</label>
+  <description>Self-reporting etcd node health, quota usage, backup state, leader status, and recent issues.</description>
+
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="time_tok">
+      <label>Time Range</label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+
+    <input type="dropdown" token="node_tok" searchWhenChanged="true">
+      <label>Node</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <fieldForLabel>check_host</fieldForLabel>
+      <fieldForValue>check_host</fieldForValue>
+      <search>
+        <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| stats count by check_host
+| sort check_host
+        </query>
+        <earliest>$time_tok.earliest$</earliest>
+        <latest>$time_tok.latest$</latest>
+      </search>
+    </input>
+  </fieldset>
+
+  <row>
+    <panel>
+      <single>
+        <title>Reporting Nodes (Seen in Last 10m)</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| stats latest(_time) as last_seen by check_host
+| eval last_seen_age_sec=now()-last_seen
+| where last_seen_age_sec&lt;=600
+| stats count as reporting_nodes
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+      </single>
+    </panel>
+
+    <panel>
+      <single>
+        <title>Healthy Nodes (Seen in Last 10m)</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| stats latest(_time) as last_seen latest(health_state) as health_state by check_host
+| eval last_seen_age_sec=now()-last_seen
+| eval healthy=if(last_seen_age_sec&lt;=600 AND health_state="healthy",1,0)
+| stats sum(healthy) as healthy_nodes
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+      </single>
+    </panel>
+
+    <panel>
+      <single>
+        <title>Nodes with Alarms</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| stats latest(has_alarm) as has_alarm by check_host
+| where has_alarm=true
+| stats count as alarmed_nodes
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+      </single>
+    </panel>
+
+    <panel>
+      <single>
+        <title>Nodes in Issue State</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| stats latest(is_issue) as is_issue by check_host
+| where is_issue=true
+| stats count as issue_nodes
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+      </single>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Current Leader</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| stats latest(_time) as last_seen latest(check_host) as check_host latest(version) as version latest(revision) as revision latest(raft_term) as raft_term latest(leader_id) as leader_id by node_role
+| where node_role="leader"
+| eval last_seen_age_sec=now()-last_seen
+| table check_host leader_id version revision raft_term last_seen_age_sec
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">5</option>
+      </table>
+    </panel>
+
+    <panel>
+      <table>
+        <title>Reporting Freshness</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| stats latest(_time) as last_seen latest(health_state) as health_state latest(severity) as severity by check_host
+| eval last_seen_age_sec=now()-last_seen
+| eval reporting_state=case(last_seen_age_sec&lt;=600,"current", last_seen_age_sec&lt;=1800,"late", true(),"stale")
+| table check_host last_seen last_seen_age_sec reporting_state health_state severity
+| sort check_host
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">20</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Latest Per-Node Status</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| stats latest(_time) as last_seen
+        latest(status) as status
+        latest(severity) as severity
+        latest(check_ip) as check_ip
+        latest(endpoint) as endpoint
+        latest(health_state) as health_state
+        latest(node_role) as node_role
+        latest(version) as version
+        latest(revision) as revision
+        latest(db_size_mb) as db_size_mb
+        latest(db_size_in_use_mb) as db_size_in_use_mb
+        latest(db_file_in_use_pct) as db_file_in_use_pct
+        latest(db_quota_used_pct) as db_quota_used_pct
+        latest(db_quota_in_use_pct) as db_quota_in_use_pct
+        latest(db_space_state) as db_space_state
+        latest(raft_term) as raft_term
+        latest(raft_index) as raft_index
+        latest(raft_applied_index) as raft_applied_index
+        latest(has_alarm) as has_alarm
+        latest(alarms_text) as alarms_text
+        latest(backup_state) as backup_state
+        latest(latest_backup_age_hr) as latest_backup_age_hr
+        latest(has_status_errors) as has_status_errors
+        latest(status_errors_text) as status_errors_text
+        latest(notable_text) as notable_text
+        latest(is_issue) as is_issue
+        by check_host
+| eval last_seen_age_sec=now()-last_seen
+| eval reporting_state=case(last_seen_age_sec&lt;=600,"current", last_seen_age_sec&lt;=1800,"late", true(),"stale")
+| table check_host reporting_state last_seen_age_sec status severity health_state node_role version revision db_size_mb db_size_in_use_mb db_file_in_use_pct db_quota_used_pct db_quota_in_use_pct db_space_state raft_term raft_index raft_applied_index has_alarm alarms_text backup_state latest_backup_age_hr has_status_errors status_errors_text is_issue notable_text
+| sort check_host
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">20</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Revision / Raft Lag by Node</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| stats latest(revision) as revision
+        latest(raft_index) as raft_index
+        latest(raft_applied_index) as raft_applied_index
+        latest(raft_term) as raft_term
+        latest(health_state) as health_state
+        latest(severity) as severity
+        by check_host
+| eventstats max(revision) as max_revision max(raft_index) as max_raft_index max(raft_applied_index) as max_raft_applied_index
+| eval revision_lag=max_revision-revision
+| eval raft_index_lag=max_raft_index-raft_index
+| eval raft_applied_lag=max_raft_applied_index-raft_applied_index
+| table check_host health_state severity revision revision_lag raft_index raft_index_lag raft_applied_index raft_applied_lag raft_term
+| sort - revision_lag - raft_index_lag
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">20</option>
+      </table>
+    </panel>
+
+    <panel>
+      <table>
+        <title>Backup Freshness by Node</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| stats latest(backup_state) as backup_state
+        latest(latest_backup_age_hr) as latest_backup_age_hr
+        latest(latest_backup_size_mb) as latest_backup_size_mb
+        latest(latest_backup_file) as latest_backup_file
+        latest(severity) as severity
+        by check_host
+| table check_host backup_state latest_backup_age_hr latest_backup_size_mb latest_backup_file severity
+| sort check_host
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">20</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <chart>
+        <title>Quota In Use % Over Time</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| timechart span=5m latest(db_quota_in_use_pct) by check_host limit=0
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="charting.chart">line</option>
+        <option name="charting.axisY.minimumNumber">0</option>
+        <option name="charting.axisY.maximumNumber">100</option>
+      </chart>
+    </panel>
+
+    <panel>
+      <chart>
+        <title>File In Use % Over Time</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| timechart span=5m latest(db_file_in_use_pct) by check_host limit=0
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="charting.chart">line</option>
+        <option name="charting.axisY.minimumNumber">0</option>
+        <option name="charting.axisY.maximumNumber">100</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <chart>
+        <title>Backup Age (Hours) Over Time</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| timechart span=5m latest(latest_backup_age_hr) by check_host limit=0
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="charting.chart">line</option>
+      </chart>
+    </panel>
+
+    <panel>
+      <chart>
+        <title>Issue Events Over Time</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| eval issue_num=if(is_issue=true,1,0)
+| timechart span=5m sum(issue_num) as issue_events
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Recent Issue Events</title>
+        <search>
+          <query>
+index=operational_logs_30 sourcetype=etcd:node:health:json
+| where "$node_tok$"="*" OR check_host="$node_tok$"
+| where is_issue=true
+| table _time check_host check_ip endpoint severity status health_state node_role version revision db_size_mb db_size_in_use_mb db_quota_in_use_pct db_space_state has_alarm alarms_text backup_state latest_backup_age_hr has_status_errors status_errors_text notable_text
+| sort - _time
+          </query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">50</option>
+      </table>
+    </panel>
+  </row>
+</form>

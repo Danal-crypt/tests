@@ -1,6 +1,6 @@
 <form version="1.1" theme="light">
   <label>Cribl Metrics - Stream 4.17</label>
-  <description>Cribl throughput dashboard for sources, destinations, routes, pipelines, and Splunk metadata dimensions.</description>
+  <description>Fixed dashboard for index=criblmetrics using documented Cribl Stream metric families.</description>
 
   <fieldset submitButton="false">
     <input type="time" token="time_tok">
@@ -11,49 +11,181 @@
       </default>
     </input>
 
-    <input type="text" token="index_tok">
-      <label>Metrics Index</label>
-      <default>criblmetrics</default>
+    <input type="dropdown" token="byte_unit">
+      <label>Byte Display Unit</label>
+      <choice value="Bytes">Bytes</choice>
+      <choice value="MB">Megabytes</choice>
+      <choice value="GB">Gigabytes</choice>
+      <default>MB</default>
     </input>
 
-    <input type="text" token="metric_prefix">
-      <label>Metric Prefix (no trailing dot)</label>
-      <default>cribl.logstream</default>
+    <input type="dropdown" token="cribl_source_tok">
+      <label>Cribl Source</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <fieldForLabel>label</fieldForLabel>
+      <fieldForValue>value</fieldForValue>
+      <search>
+        <query><![CDATA[
+| mstats count WHERE index=criblmetrics AND metric_name="cribl.logstream.total.in_events" BY input
+| fields input
+| where isnotnull(input)
+| rename input as value
+| eval label=value
+| dedup value
+| sort label
+        ]]></query>
+        <earliest>$time_tok.earliest$</earliest>
+        <latest>$time_tok.latest$</latest>
+      </search>
     </input>
 
-    <input type="text" token="cribl_source_dim">
-      <label>Cribl Source Dimension</label>
-      <default>input</default>
+    <input type="dropdown" token="dest_tok">
+      <label>Cribl Destination</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <fieldForLabel>label</fieldForLabel>
+      <fieldForValue>value</fieldForValue>
+      <search>
+        <query><![CDATA[
+| mstats count WHERE index=criblmetrics AND metric_name="cribl.logstream.total.out_events" BY output
+| fields output
+| where isnotnull(output)
+| rename output as value
+| eval label=value
+| dedup value
+| sort label
+        ]]></query>
+        <earliest>$time_tok.earliest$</earliest>
+        <latest>$time_tok.latest$</latest>
+      </search>
     </input>
 
-    <input type="text" token="cribl_dest_dim">
-      <label>Cribl Destination Dimension</label>
-      <default>output</default>
+    <input type="dropdown" token="route_tok">
+      <label>Route</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <fieldForLabel>label</fieldForLabel>
+      <fieldForValue>value</fieldForValue>
+      <search>
+        <query><![CDATA[
+| mstats count WHERE index=criblmetrics AND metric_name="cribl.logstream.route.in_events" BY route
+| fields route
+| where isnotnull(route)
+| rename route as value
+| eval label=value
+| dedup value
+| sort label
+        ]]></query>
+        <earliest>$time_tok.earliest$</earliest>
+        <latest>$time_tok.latest$</latest>
+      </search>
     </input>
 
-    <input type="text" token="route_dim">
-      <label>Route Dimension</label>
-      <default>route</default>
+    <input type="dropdown" token="pipeline_tok">
+      <label>Pipeline</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <fieldForLabel>label</fieldForLabel>
+      <fieldForValue>value</fieldForValue>
+      <search>
+        <query><![CDATA[
+| mstats count WHERE index=criblmetrics AND metric_name="cribl.logstream.pipe.in_events" BY pipeline pipe
+| eval pipeline_name=coalesce(pipeline, pipe)
+| where isnotnull(pipeline_name)
+| fields pipeline_name
+| rename pipeline_name as value
+| eval label=value
+| dedup value
+| sort label
+        ]]></query>
+        <earliest>$time_tok.earliest$</earliest>
+        <latest>$time_tok.latest$</latest>
+      </search>
     </input>
 
-    <input type="text" token="pipeline_dim">
-      <label>Pipeline Dimension</label>
-      <default>pipeline</default>
+    <input type="dropdown" token="data_index_tok">
+      <label>Data Index</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <fieldForLabel>label</fieldForLabel>
+      <fieldForValue>value</fieldForValue>
+      <search>
+        <query><![CDATA[
+| mstats count WHERE index=criblmetrics AND metric_name="cribl.logstream.index.in_events" BY extracted_index
+| where isnotnull(extracted_index)
+| fields extracted_index
+| rename extracted_index as value
+| eval label=value
+| dedup value
+| sort label
+        ]]></query>
+        <earliest>$time_tok.earliest$</earliest>
+        <latest>$time_tok.latest$</latest>
+      </search>
     </input>
 
-    <input type="text" token="metadata_index_dim">
-      <label>Metadata Index Dimension</label>
-      <default>index</default>
+    <input type="dropdown" token="data_sourcetype_tok">
+      <label>Data Sourcetype</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <fieldForLabel>label</fieldForLabel>
+      <fieldForValue>value</fieldForValue>
+      <search>
+        <query><![CDATA[
+| mstats count WHERE index=criblmetrics AND metric_name="cribl.logstream.sourcetype.in_events" BY extracted_sourcetype
+| where isnotnull(extracted_sourcetype)
+| fields extracted_sourcetype
+| rename extracted_sourcetype as value
+| eval label=value
+| dedup value
+| sort label
+        ]]></query>
+        <earliest>$time_tok.earliest$</earliest>
+        <latest>$time_tok.latest$</latest>
+      </search>
     </input>
 
-    <input type="text" token="metadata_sourcetype_dim">
-      <label>Metadata Sourcetype Dimension</label>
-      <default>extracted_sourcetype</default>
+    <input type="dropdown" token="data_host_tok">
+      <label>Data Host</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <fieldForLabel>label</fieldForLabel>
+      <fieldForValue>value</fieldForValue>
+      <search>
+        <query><![CDATA[
+| mstats count WHERE index=criblmetrics AND metric_name="cribl.logstream.host.in_events" BY extracted_host
+| where isnotnull(extracted_host)
+| fields extracted_host
+| rename extracted_host as value
+| eval label=value
+| dedup value
+| sort label
+        ]]></query>
+        <earliest>$time_tok.earliest$</earliest>
+        <latest>$time_tok.latest$</latest>
+      </search>
     </input>
 
-    <input type="text" token="metadata_source_dim">
-      <label>Metadata Source Dimension</label>
-      <default>extracted_source</default>
+    <input type="dropdown" token="data_source_tok">
+      <label>Data Source</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <fieldForLabel>label</fieldForLabel>
+      <fieldForValue>value</fieldForValue>
+      <search>
+        <query><![CDATA[
+| mstats count WHERE index=criblmetrics AND metric_name="cribl.logstream.source.in_events" BY extracted_source
+| where isnotnull(extracted_source)
+| fields extracted_source
+| rename extracted_source as value
+| eval label=value
+| dedup value
+| sort label
+        ]]></query>
+        <earliest>$time_tok.earliest$</earliest>
+        <latest>$time_tok.latest$</latest>
+      </search>
     </input>
   </fieldset>
 
@@ -63,12 +195,17 @@
         <title>Total Bytes In</title>
         <search>
           <query><![CDATA[
-| mstats sum(_value) as total WHERE index=$index_tok$ AND metric_name="$metric_prefix$.total.in_bytes"
+| mstats sum(_value) as total WHERE index=criblmetrics AND metric_name="cribl.logstream.total.in_bytes"
+| eval Value=case(
+    "$byte_unit$"="Bytes", round(total,0),
+    "$byte_unit$"="MB", round(total/1024/1024,2),
+    "$byte_unit$"="GB", round(total/1024/1024/1024,3)
+  )
+| fields Value
           ]]></query>
           <earliest>$time_tok.earliest$</earliest>
           <latest>$time_tok.latest$</latest>
         </search>
-        <option name="drilldown">none</option>
       </single>
     </panel>
 
@@ -77,12 +214,17 @@
         <title>Total Bytes Out</title>
         <search>
           <query><![CDATA[
-| mstats sum(_value) as total WHERE index=$index_tok$ AND metric_name="$metric_prefix$.total.out_bytes"
+| mstats sum(_value) as total WHERE index=criblmetrics AND metric_name="cribl.logstream.total.out_bytes"
+| eval Value=case(
+    "$byte_unit$"="Bytes", round(total,0),
+    "$byte_unit$"="MB", round(total/1024/1024,2),
+    "$byte_unit$"="GB", round(total/1024/1024/1024,3)
+  )
+| fields Value
           ]]></query>
           <earliest>$time_tok.earliest$</earliest>
           <latest>$time_tok.latest$</latest>
         </search>
-        <option name="drilldown">none</option>
       </single>
     </panel>
 
@@ -91,12 +233,11 @@
         <title>Total Events In</title>
         <search>
           <query><![CDATA[
-| mstats sum(_value) as total WHERE index=$index_tok$ AND metric_name="$metric_prefix$.total.in_events"
+| mstats sum(_value) as Value WHERE index=criblmetrics AND metric_name="cribl.logstream.total.in_events"
           ]]></query>
           <earliest>$time_tok.earliest$</earliest>
           <latest>$time_tok.latest$</latest>
         </search>
-        <option name="drilldown">none</option>
       </single>
     </panel>
 
@@ -105,12 +246,11 @@
         <title>Total Events Out</title>
         <search>
           <query><![CDATA[
-| mstats sum(_value) as total WHERE index=$index_tok$ AND metric_name="$metric_prefix$.total.out_events"
+| mstats sum(_value) as Value WHERE index=criblmetrics AND metric_name="cribl.logstream.total.out_events"
           ]]></query>
           <earliest>$time_tok.earliest$</earliest>
           <latest>$time_tok.latest$</latest>
         </search>
-        <option name="drilldown">none</option>
       </single>
     </panel>
   </row>
@@ -121,10 +261,10 @@
         <title>Total Events Over Time</title>
         <search>
           <query><![CDATA[
-| mstats sum(_value) as value WHERE index=$index_tok$ AND (metric_name="$metric_prefix$.total.in_events" OR metric_name="$metric_prefix$.total.out_events") span=1m BY metric_name
+| mstats sum(_value) as value WHERE index=criblmetrics AND (metric_name="cribl.logstream.total.in_events" OR metric_name="cribl.logstream.total.out_events") span=1m BY metric_name
 | eval series=case(
-    metric_name="$metric_prefix$.total.in_events","events_in",
-    metric_name="$metric_prefix$.total.out_events","events_out"
+    metric_name="cribl.logstream.total.in_events","Events In",
+    metric_name="cribl.logstream.total.out_events","Events Out"
   )
 | timechart span=1m sum(value) by series
           ]]></query>
@@ -140,10 +280,15 @@
         <title>Total Bytes Over Time</title>
         <search>
           <query><![CDATA[
-| mstats sum(_value) as value WHERE index=$index_tok$ AND (metric_name="$metric_prefix$.total.in_bytes" OR metric_name="$metric_prefix$.total.out_bytes") span=1m BY metric_name
+| mstats sum(_value) as value WHERE index=criblmetrics AND (metric_name="cribl.logstream.total.in_bytes" OR metric_name="cribl.logstream.total.out_bytes") span=1m BY metric_name
 | eval series=case(
-    metric_name="$metric_prefix$.total.in_bytes","bytes_in",
-    metric_name="$metric_prefix$.total.out_bytes","bytes_out"
+    metric_name="cribl.logstream.total.in_bytes","Bytes In",
+    metric_name="cribl.logstream.total.out_bytes","Bytes Out"
+  )
+| eval value=case(
+    "$byte_unit$"="Bytes", value,
+    "$byte_unit$"="MB", value/1024/1024,
+    "$byte_unit$"="GB", value/1024/1024/1024
   )
 | timechart span=1m sum(value) by series
           ]]></query>
@@ -158,59 +303,54 @@
   <row>
     <panel>
       <table>
-        <title>Cribl Sources (best effort via documented source/input dimensions)</title>
+        <title>Cribl Sources (documented input-side totals)</title>
         <search>
           <query><![CDATA[
-| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND (
-    metric_name="$metric_prefix$.total.in_bytes" OR
-    metric_name="$metric_prefix$.total.out_bytes" OR
-    metric_name="$metric_prefix$.total.in_events" OR
-    metric_name="$metric_prefix$.total.out_events"
-  ) BY metric_name $cribl_source_dim$
-| rename $cribl_source_dim$ as cribl_source
-| eval metric=case(
-    metric_name="$metric_prefix$.total.in_bytes","bytes_in",
-    metric_name="$metric_prefix$.total.out_bytes","bytes_out",
-    metric_name="$metric_prefix$.total.in_events","events_in",
-    metric_name="$metric_prefix$.total.out_events","events_out"
+| mstats sum(_value) as value WHERE index=criblmetrics AND (metric_name="cribl.logstream.total.in_bytes" OR metric_name="cribl.logstream.total.in_events") BY metric_name input
+| where "$cribl_source_tok$"="*" OR input="$cribl_source_tok$"
+| eval bytes_in=if(metric_name="cribl.logstream.total.in_bytes", value, 0)
+| eval events_in=if(metric_name="cribl.logstream.total.in_events", value, 0)
+| stats sum(bytes_in) as bytes_in sum(events_in) as events_in by input
+| sort 0 - bytes_in - events_in
+| eval "Bytes In ($byte_unit$)"=case(
+    "$byte_unit$"="Bytes", round(bytes_in,0),
+    "$byte_unit$"="MB", round(bytes_in/1024/1024,2),
+    "$byte_unit$"="GB", round(bytes_in/1024/1024/1024,3)
   )
-| chart sum(metric_value) as value over cribl_source by metric
-| fillnull value=0
-| sort 0 - bytes_out - events_out - bytes_in - events_in
+| rename input as "Cribl Source" events_in as "Events In"
+| table "Cribl Source" "Bytes In ($byte_unit$)" "Events In"
           ]]></query>
           <earliest>$time_tok.earliest$</earliest>
           <latest>$time_tok.latest$</latest>
         </search>
-        <option name="count">25</option>
+        <option name="count">20</option>
       </table>
     </panel>
 
     <panel>
       <table>
-        <title>Cribl Destinations (best effort via documented destination/output dimensions)</title>
+        <title>Cribl Destinations (documented output-side totals)</title>
         <search>
           <query><![CDATA[
-| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND (
-    metric_name="$metric_prefix$.total.in_bytes" OR
-    metric_name="$metric_prefix$.total.out_bytes" OR
-    metric_name="$metric_prefix$.total.in_events" OR
-    metric_name="$metric_prefix$.total.out_events"
-  ) BY metric_name $cribl_dest_dim$
-| rename $cribl_dest_dim$ as cribl_destination
-| eval metric=case(
-    metric_name="$metric_prefix$.total.in_bytes","bytes_in",
-    metric_name="$metric_prefix$.total.out_bytes","bytes_out",
-    metric_name="$metric_prefix$.total.in_events","events_in",
-    metric_name="$metric_prefix$.total.out_events","events_out"
+| mstats sum(_value) as value WHERE index=criblmetrics AND (metric_name="cribl.logstream.total.out_bytes" OR metric_name="cribl.logstream.total.out_events" OR metric_name="cribl.logstream.total.dropped_events") BY metric_name output
+| where "$dest_tok$"="*" OR output="$dest_tok$"
+| eval bytes_out=if(metric_name="cribl.logstream.total.out_bytes", value, 0)
+| eval events_out=if(metric_name="cribl.logstream.total.out_events", value, 0)
+| eval dropped_events=if(metric_name="cribl.logstream.total.dropped_events", value, 0)
+| stats sum(bytes_out) as bytes_out sum(events_out) as events_out sum(dropped_events) as dropped_events by output
+| sort 0 - bytes_out - events_out - dropped_events
+| eval "Bytes Out ($byte_unit$)"=case(
+    "$byte_unit$"="Bytes", round(bytes_out,0),
+    "$byte_unit$"="MB", round(bytes_out/1024/1024,2),
+    "$byte_unit$"="GB", round(bytes_out/1024/1024/1024,3)
   )
-| chart sum(metric_value) as value over cribl_destination by metric
-| fillnull value=0
-| sort 0 - bytes_out - events_out - bytes_in - events_in
+| rename output as "Cribl Destination" events_out as "Events Out" dropped_events as "Dropped Events"
+| table "Cribl Destination" "Bytes Out ($byte_unit$)" "Events Out" "Dropped Events"
           ]]></query>
           <earliest>$time_tok.earliest$</earliest>
           <latest>$time_tok.latest$</latest>
         </search>
-        <option name="count">25</option>
+        <option name="count">20</option>
       </table>
     </panel>
   </row>
@@ -221,23 +361,32 @@
         <title>Routes</title>
         <search>
           <query><![CDATA[
-| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND metric_name="$metric_prefix$.route.*" BY metric_name $route_dim$
-| rename $route_dim$ as route_name
-| eval metric=case(
-    like(metric_name,"%.in_bytes"),"bytes_in",
-    like(metric_name,"%.out_bytes"),"bytes_out",
-    like(metric_name,"%.in_events"),"events_in",
-    like(metric_name,"%.out_events"),"events_out",
-    like(metric_name,"%.dropped_events"),"dropped_events"
+| mstats sum(_value) as value WHERE index=criblmetrics AND metric_name="cribl.logstream.route.*" BY metric_name route
+| where "$route_tok$"="*" OR route="$route_tok$"
+| eval bytes_in=if(metric_name="cribl.logstream.route.in_bytes", value, 0)
+| eval bytes_out=if(metric_name="cribl.logstream.route.out_bytes", value, 0)
+| eval events_in=if(metric_name="cribl.logstream.route.in_events", value, 0)
+| eval events_out=if(metric_name="cribl.logstream.route.out_events", value, 0)
+| eval dropped_events=if(metric_name="cribl.logstream.route.dropped_events", value, 0)
+| stats sum(bytes_in) as bytes_in sum(bytes_out) as bytes_out sum(events_in) as events_in sum(events_out) as events_out sum(dropped_events) as dropped_events by route
+| sort 0 - bytes_out - events_out - bytes_in - events_in
+| eval "Bytes In ($byte_unit$)"=case(
+    "$byte_unit$"="Bytes", round(bytes_in,0),
+    "$byte_unit$"="MB", round(bytes_in/1024/1024,2),
+    "$byte_unit$"="GB", round(bytes_in/1024/1024/1024,3)
   )
-| chart sum(metric_value) as value over route_name by metric
-| fillnull value=0
-| sort 0 - bytes_out - events_out - dropped_events
+| eval "Bytes Out ($byte_unit$)"=case(
+    "$byte_unit$"="Bytes", round(bytes_out,0),
+    "$byte_unit$"="MB", round(bytes_out/1024/1024,2),
+    "$byte_unit$"="GB", round(bytes_out/1024/1024/1024,3)
+  )
+| rename route as Route events_in as "Events In" events_out as "Events Out" dropped_events as "Dropped Events"
+| table Route "Bytes In ($byte_unit$)" "Bytes Out ($byte_unit$)" "Events In" "Events Out" "Dropped Events"
           ]]></query>
           <earliest>$time_tok.earliest$</earliest>
           <latest>$time_tok.latest$</latest>
         </search>
-        <option name="count">25</option>
+        <option name="count">20</option>
       </table>
     </panel>
 
@@ -246,21 +395,22 @@
         <title>Pipelines</title>
         <search>
           <query><![CDATA[
-| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND metric_name="$metric_prefix$.pipe.*" BY metric_name $pipeline_dim$
-| rename $pipeline_dim$ as pipeline_name
-| eval metric=case(
-    like(metric_name,"%.in_events"),"events_in",
-    like(metric_name,"%.out_events"),"events_out",
-    like(metric_name,"%.dropped_events"),"dropped_events"
-  )
-| chart sum(metric_value) as value over pipeline_name by metric
-| fillnull value=0
+| mstats sum(_value) as value WHERE index=criblmetrics AND metric_name="cribl.logstream.pipe.*" BY metric_name pipeline pipe
+| eval pipeline_name=coalesce(pipeline, pipe)
+| where isnotnull(pipeline_name)
+| where "$pipeline_tok$"="*" OR pipeline_name="$pipeline_tok$"
+| eval events_in=if(metric_name="cribl.logstream.pipe.in_events", value, 0)
+| eval events_out=if(metric_name="cribl.logstream.pipe.out_events", value, 0)
+| eval dropped_events=if(metric_name="cribl.logstream.pipe.dropped_events", value, 0)
+| stats sum(events_in) as events_in sum(events_out) as events_out sum(dropped_events) as dropped_events by pipeline_name
 | sort 0 - events_out - dropped_events - events_in
+| rename pipeline_name as Pipeline events_in as "Events In" events_out as "Events Out" dropped_events as "Dropped Events"
+| table Pipeline "Events In" "Events Out" "Dropped Events"
           ]]></query>
           <earliest>$time_tok.earliest$</earliest>
           <latest>$time_tok.latest$</latest>
         </search>
-        <option name="count">25</option>
+        <option name="count">20</option>
       </table>
     </panel>
   </row>
@@ -268,49 +418,69 @@
   <row>
     <panel>
       <table>
-        <title>Splunk Metadata - Index</title>
+        <title>Data Index</title>
         <search>
           <query><![CDATA[
-| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND metric_name="$metric_prefix$.index.*" BY metric_name $metadata_index_dim$
-| rename $metadata_index_dim$ as splunk_index
-| eval metric=case(
-    like(metric_name,"%.in_bytes"),"bytes_in",
-    like(metric_name,"%.out_bytes"),"bytes_out",
-    like(metric_name,"%.in_events"),"events_in",
-    like(metric_name,"%.out_events"),"events_out"
-  )
-| chart sum(metric_value) as value over splunk_index by metric
-| fillnull value=0
+| mstats sum(_value) as value WHERE index=criblmetrics AND metric_name="cribl.logstream.index.*" BY metric_name extracted_index
+| where isnotnull(extracted_index)
+| where "$data_index_tok$"="*" OR extracted_index="$data_index_tok$"
+| eval bytes_in=if(metric_name="cribl.logstream.index.in_bytes", value, 0)
+| eval bytes_out=if(metric_name="cribl.logstream.index.out_bytes", value, 0)
+| eval events_in=if(metric_name="cribl.logstream.index.in_events", value, 0)
+| eval events_out=if(metric_name="cribl.logstream.index.out_events", value, 0)
+| stats sum(bytes_in) as bytes_in sum(bytes_out) as bytes_out sum(events_in) as events_in sum(events_out) as events_out by extracted_index
 | sort 0 - bytes_out - events_out - bytes_in - events_in
+| eval "Bytes In ($byte_unit$)"=case(
+    "$byte_unit$"="Bytes", round(bytes_in,0),
+    "$byte_unit$"="MB", round(bytes_in/1024/1024,2),
+    "$byte_unit$"="GB", round(bytes_in/1024/1024/1024,3)
+  )
+| eval "Bytes Out ($byte_unit$)"=case(
+    "$byte_unit$"="Bytes", round(bytes_out,0),
+    "$byte_unit$"="MB", round(bytes_out/1024/1024,2),
+    "$byte_unit$"="GB", round(bytes_out/1024/1024/1024,3)
+  )
+| rename extracted_index as "Data Index" events_in as "Events In" events_out as "Events Out"
+| table "Data Index" "Bytes In ($byte_unit$)" "Bytes Out ($byte_unit$)" "Events In" "Events Out"
           ]]></query>
           <earliest>$time_tok.earliest$</earliest>
           <latest>$time_tok.latest$</latest>
         </search>
-        <option name="count">25</option>
+        <option name="count">20</option>
       </table>
     </panel>
 
     <panel>
       <table>
-        <title>Splunk Metadata - Sourcetype</title>
+        <title>Data Sourcetype</title>
         <search>
           <query><![CDATA[
-| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND metric_name="$metric_prefix$.sourcetype.*" BY metric_name $metadata_sourcetype_dim$
-| rename $metadata_sourcetype_dim$ as splunk_sourcetype
-| eval metric=case(
-    like(metric_name,"%.in_bytes"),"bytes_in",
-    like(metric_name,"%.out_bytes"),"bytes_out",
-    like(metric_name,"%.in_events"),"events_in",
-    like(metric_name,"%.out_events"),"events_out"
-  )
-| chart sum(metric_value) as value over splunk_sourcetype by metric
-| fillnull value=0
+| mstats sum(_value) as value WHERE index=criblmetrics AND metric_name="cribl.logstream.sourcetype.*" BY metric_name extracted_sourcetype
+| where isnotnull(extracted_sourcetype)
+| where "$data_sourcetype_tok$"="*" OR extracted_sourcetype="$data_sourcetype_tok$"
+| eval bytes_in=if(metric_name="cribl.logstream.sourcetype.in_bytes", value, 0)
+| eval bytes_out=if(metric_name="cribl.logstream.sourcetype.out_bytes", value, 0)
+| eval events_in=if(metric_name="cribl.logstream.sourcetype.in_events", value, 0)
+| eval events_out=if(metric_name="cribl.logstream.sourcetype.out_events", value, 0)
+| stats sum(bytes_in) as bytes_in sum(bytes_out) as bytes_out sum(events_in) as events_in sum(events_out) as events_out by extracted_sourcetype
 | sort 0 - bytes_out - events_out - bytes_in - events_in
+| eval "Bytes In ($byte_unit$)"=case(
+    "$byte_unit$"="Bytes", round(bytes_in,0),
+    "$byte_unit$"="MB", round(bytes_in/1024/1024,2),
+    "$byte_unit$"="GB", round(bytes_in/1024/1024/1024,3)
+  )
+| eval "Bytes Out ($byte_unit$)"=case(
+    "$byte_unit$"="Bytes", round(bytes_out,0),
+    "$byte_unit$"="MB", round(bytes_out/1024/1024,2),
+    "$byte_unit$"="GB", round(bytes_out/1024/1024/1024,3)
+  )
+| rename extracted_sourcetype as "Data Sourcetype" events_in as "Events In" events_out as "Events Out"
+| table "Data Sourcetype" "Bytes In ($byte_unit$)" "Bytes Out ($byte_unit$)" "Events In" "Events Out"
           ]]></query>
           <earliest>$time_tok.earliest$</earliest>
           <latest>$time_tok.latest$</latest>
         </search>
-        <option name="count">25</option>
+        <option name="count">20</option>
       </table>
     </panel>
   </row>
@@ -318,42 +488,69 @@
   <row>
     <panel>
       <table>
-        <title>Splunk Metadata - Source</title>
+        <title>Data Host</title>
         <search>
           <query><![CDATA[
-| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND metric_name="$metric_prefix$.source.*" BY metric_name $metadata_source_dim$
-| rename $metadata_source_dim$ as splunk_source
-| eval metric=case(
-    like(metric_name,"%.in_bytes"),"bytes_in",
-    like(metric_name,"%.out_bytes"),"bytes_out",
-    like(metric_name,"%.in_events"),"events_in",
-    like(metric_name,"%.out_events"),"events_out"
-  )
-| chart sum(metric_value) as value over splunk_source by metric
-| fillnull value=0
+| mstats sum(_value) as value WHERE index=criblmetrics AND metric_name="cribl.logstream.host.*" BY metric_name extracted_host
+| where isnotnull(extracted_host)
+| where "$data_host_tok$"="*" OR extracted_host="$data_host_tok$"
+| eval bytes_in=if(metric_name="cribl.logstream.host.in_bytes", value, 0)
+| eval bytes_out=if(metric_name="cribl.logstream.host.out_bytes", value, 0)
+| eval events_in=if(metric_name="cribl.logstream.host.in_events", value, 0)
+| eval events_out=if(metric_name="cribl.logstream.host.out_events", value, 0)
+| stats sum(bytes_in) as bytes_in sum(bytes_out) as bytes_out sum(events_in) as events_in sum(events_out) as events_out by extracted_host
 | sort 0 - bytes_out - events_out - bytes_in - events_in
+| eval "Bytes In ($byte_unit$)"=case(
+    "$byte_unit$"="Bytes", round(bytes_in,0),
+    "$byte_unit$"="MB", round(bytes_in/1024/1024,2),
+    "$byte_unit$"="GB", round(bytes_in/1024/1024/1024,3)
+  )
+| eval "Bytes Out ($byte_unit$)"=case(
+    "$byte_unit$"="Bytes", round(bytes_out,0),
+    "$byte_unit$"="MB", round(bytes_out/1024/1024,2),
+    "$byte_unit$"="GB", round(bytes_out/1024/1024/1024,3)
+  )
+| rename extracted_host as "Data Host" events_in as "Events In" events_out as "Events Out"
+| table "Data Host" "Bytes In ($byte_unit$)" "Bytes Out ($byte_unit$)" "Events In" "Events Out"
           ]]></query>
           <earliest>$time_tok.earliest$</earliest>
           <latest>$time_tok.latest$</latest>
         </search>
-        <option name="count">25</option>
+        <option name="count">20</option>
       </table>
     </panel>
 
     <panel>
       <table>
-        <title>Dimension Discovery</title>
+        <title>Data Source</title>
         <search>
           <query><![CDATA[
-| mcatalog values(_dims) as dims WHERE index=$index_tok$
-| mvexpand dims
-| rename dims as available_dimension
-| sort available_dimension
+| mstats sum(_value) as value WHERE index=criblmetrics AND metric_name="cribl.logstream.source.*" BY metric_name extracted_source
+| where isnotnull(extracted_source)
+| where "$data_source_tok$"="*" OR extracted_source="$data_source_tok$"
+| eval bytes_in=if(metric_name="cribl.logstream.source.in_bytes", value, 0)
+| eval bytes_out=if(metric_name="cribl.logstream.source.out_bytes", value, 0)
+| eval events_in=if(metric_name="cribl.logstream.source.in_events", value, 0)
+| eval events_out=if(metric_name="cribl.logstream.source.out_events", value, 0)
+| stats sum(bytes_in) as bytes_in sum(bytes_out) as bytes_out sum(events_in) as events_in sum(events_out) as events_out by extracted_source
+| sort 0 - bytes_out - events_out - bytes_in - events_in
+| eval "Bytes In ($byte_unit$)"=case(
+    "$byte_unit$"="Bytes", round(bytes_in,0),
+    "$byte_unit$"="MB", round(bytes_in/1024/1024,2),
+    "$byte_unit$"="GB", round(bytes_in/1024/1024/1024,3)
+  )
+| eval "Bytes Out ($byte_unit$)"=case(
+    "$byte_unit$"="Bytes", round(bytes_out,0),
+    "$byte_unit$"="MB", round(bytes_out/1024/1024,2),
+    "$byte_unit$"="GB", round(bytes_out/1024/1024/1024,3)
+  )
+| rename extracted_source as "Data Source" events_in as "Events In" events_out as "Events Out"
+| table "Data Source" "Bytes In ($byte_unit$)" "Bytes Out ($byte_unit$)" "Events In" "Events Out"
           ]]></query>
           <earliest>$time_tok.earliest$</earliest>
           <latest>$time_tok.latest$</latest>
         </search>
-        <option name="count">100</option>
+        <option name="count">20</option>
       </table>
     </panel>
   </row>

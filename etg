@@ -1,0 +1,360 @@
+<form version="1.1" theme="light">
+  <label>Cribl Metrics - Stream 4.17</label>
+  <description>Cribl throughput dashboard for sources, destinations, routes, pipelines, and Splunk metadata dimensions.</description>
+
+  <fieldset submitButton="false">
+    <input type="time" token="time_tok">
+      <label>Time Range</label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+
+    <input type="text" token="index_tok">
+      <label>Metrics Index</label>
+      <default>criblmetrics</default>
+    </input>
+
+    <input type="text" token="metric_prefix">
+      <label>Metric Prefix (no trailing dot)</label>
+      <default>cribl.logstream</default>
+    </input>
+
+    <input type="text" token="cribl_source_dim">
+      <label>Cribl Source Dimension</label>
+      <default>input</default>
+    </input>
+
+    <input type="text" token="cribl_dest_dim">
+      <label>Cribl Destination Dimension</label>
+      <default>output</default>
+    </input>
+
+    <input type="text" token="route_dim">
+      <label>Route Dimension</label>
+      <default>route</default>
+    </input>
+
+    <input type="text" token="pipeline_dim">
+      <label>Pipeline Dimension</label>
+      <default>pipeline</default>
+    </input>
+
+    <input type="text" token="metadata_index_dim">
+      <label>Metadata Index Dimension</label>
+      <default>index</default>
+    </input>
+
+    <input type="text" token="metadata_sourcetype_dim">
+      <label>Metadata Sourcetype Dimension</label>
+      <default>extracted_sourcetype</default>
+    </input>
+
+    <input type="text" token="metadata_source_dim">
+      <label>Metadata Source Dimension</label>
+      <default>extracted_source</default>
+    </input>
+  </fieldset>
+
+  <row>
+    <panel>
+      <single>
+        <title>Total Bytes In</title>
+        <search>
+          <query><![CDATA[
+| mstats sum(_value) as total WHERE index=$index_tok$ AND metric_name="$metric_prefix$.total.in_bytes"
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+
+    <panel>
+      <single>
+        <title>Total Bytes Out</title>
+        <search>
+          <query><![CDATA[
+| mstats sum(_value) as total WHERE index=$index_tok$ AND metric_name="$metric_prefix$.total.out_bytes"
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+
+    <panel>
+      <single>
+        <title>Total Events In</title>
+        <search>
+          <query><![CDATA[
+| mstats sum(_value) as total WHERE index=$index_tok$ AND metric_name="$metric_prefix$.total.in_events"
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+
+    <panel>
+      <single>
+        <title>Total Events Out</title>
+        <search>
+          <query><![CDATA[
+| mstats sum(_value) as total WHERE index=$index_tok$ AND metric_name="$metric_prefix$.total.out_events"
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <chart>
+        <title>Total Events Over Time</title>
+        <search>
+          <query><![CDATA[
+| mstats sum(_value) as value WHERE index=$index_tok$ AND (metric_name="$metric_prefix$.total.in_events" OR metric_name="$metric_prefix$.total.out_events") span=1m BY metric_name
+| eval series=case(
+    metric_name="$metric_prefix$.total.in_events","events_in",
+    metric_name="$metric_prefix$.total.out_events","events_out"
+  )
+| timechart span=1m sum(value) by series
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="charting.chart">line</option>
+      </chart>
+    </panel>
+
+    <panel>
+      <chart>
+        <title>Total Bytes Over Time</title>
+        <search>
+          <query><![CDATA[
+| mstats sum(_value) as value WHERE index=$index_tok$ AND (metric_name="$metric_prefix$.total.in_bytes" OR metric_name="$metric_prefix$.total.out_bytes") span=1m BY metric_name
+| eval series=case(
+    metric_name="$metric_prefix$.total.in_bytes","bytes_in",
+    metric_name="$metric_prefix$.total.out_bytes","bytes_out"
+  )
+| timechart span=1m sum(value) by series
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="charting.chart">line</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Cribl Sources (best effort via documented source/input dimensions)</title>
+        <search>
+          <query><![CDATA[
+| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND (
+    metric_name="$metric_prefix$.total.in_bytes" OR
+    metric_name="$metric_prefix$.total.out_bytes" OR
+    metric_name="$metric_prefix$.total.in_events" OR
+    metric_name="$metric_prefix$.total.out_events"
+  ) BY metric_name $cribl_source_dim$
+| rename $cribl_source_dim$ as cribl_source
+| eval metric=case(
+    metric_name="$metric_prefix$.total.in_bytes","bytes_in",
+    metric_name="$metric_prefix$.total.out_bytes","bytes_out",
+    metric_name="$metric_prefix$.total.in_events","events_in",
+    metric_name="$metric_prefix$.total.out_events","events_out"
+  )
+| chart sum(metric_value) as value over cribl_source by metric
+| fillnull value=0
+| sort 0 - bytes_out - events_out - bytes_in - events_in
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">25</option>
+      </table>
+    </panel>
+
+    <panel>
+      <table>
+        <title>Cribl Destinations (best effort via documented destination/output dimensions)</title>
+        <search>
+          <query><![CDATA[
+| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND (
+    metric_name="$metric_prefix$.total.in_bytes" OR
+    metric_name="$metric_prefix$.total.out_bytes" OR
+    metric_name="$metric_prefix$.total.in_events" OR
+    metric_name="$metric_prefix$.total.out_events"
+  ) BY metric_name $cribl_dest_dim$
+| rename $cribl_dest_dim$ as cribl_destination
+| eval metric=case(
+    metric_name="$metric_prefix$.total.in_bytes","bytes_in",
+    metric_name="$metric_prefix$.total.out_bytes","bytes_out",
+    metric_name="$metric_prefix$.total.in_events","events_in",
+    metric_name="$metric_prefix$.total.out_events","events_out"
+  )
+| chart sum(metric_value) as value over cribl_destination by metric
+| fillnull value=0
+| sort 0 - bytes_out - events_out - bytes_in - events_in
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">25</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Routes</title>
+        <search>
+          <query><![CDATA[
+| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND metric_name="$metric_prefix$.route.*" BY metric_name $route_dim$
+| rename $route_dim$ as route_name
+| eval metric=case(
+    like(metric_name,"%.in_bytes"),"bytes_in",
+    like(metric_name,"%.out_bytes"),"bytes_out",
+    like(metric_name,"%.in_events"),"events_in",
+    like(metric_name,"%.out_events"),"events_out",
+    like(metric_name,"%.dropped_events"),"dropped_events"
+  )
+| chart sum(metric_value) as value over route_name by metric
+| fillnull value=0
+| sort 0 - bytes_out - events_out - dropped_events
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">25</option>
+      </table>
+    </panel>
+
+    <panel>
+      <table>
+        <title>Pipelines</title>
+        <search>
+          <query><![CDATA[
+| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND metric_name="$metric_prefix$.pipe.*" BY metric_name $pipeline_dim$
+| rename $pipeline_dim$ as pipeline_name
+| eval metric=case(
+    like(metric_name,"%.in_events"),"events_in",
+    like(metric_name,"%.out_events"),"events_out",
+    like(metric_name,"%.dropped_events"),"dropped_events"
+  )
+| chart sum(metric_value) as value over pipeline_name by metric
+| fillnull value=0
+| sort 0 - events_out - dropped_events - events_in
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">25</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Splunk Metadata - Index</title>
+        <search>
+          <query><![CDATA[
+| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND metric_name="$metric_prefix$.index.*" BY metric_name $metadata_index_dim$
+| rename $metadata_index_dim$ as splunk_index
+| eval metric=case(
+    like(metric_name,"%.in_bytes"),"bytes_in",
+    like(metric_name,"%.out_bytes"),"bytes_out",
+    like(metric_name,"%.in_events"),"events_in",
+    like(metric_name,"%.out_events"),"events_out"
+  )
+| chart sum(metric_value) as value over splunk_index by metric
+| fillnull value=0
+| sort 0 - bytes_out - events_out - bytes_in - events_in
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">25</option>
+      </table>
+    </panel>
+
+    <panel>
+      <table>
+        <title>Splunk Metadata - Sourcetype</title>
+        <search>
+          <query><![CDATA[
+| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND metric_name="$metric_prefix$.sourcetype.*" BY metric_name $metadata_sourcetype_dim$
+| rename $metadata_sourcetype_dim$ as splunk_sourcetype
+| eval metric=case(
+    like(metric_name,"%.in_bytes"),"bytes_in",
+    like(metric_name,"%.out_bytes"),"bytes_out",
+    like(metric_name,"%.in_events"),"events_in",
+    like(metric_name,"%.out_events"),"events_out"
+  )
+| chart sum(metric_value) as value over splunk_sourcetype by metric
+| fillnull value=0
+| sort 0 - bytes_out - events_out - bytes_in - events_in
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">25</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Splunk Metadata - Source</title>
+        <search>
+          <query><![CDATA[
+| mstats sum(_value) as metric_value WHERE index=$index_tok$ AND metric_name="$metric_prefix$.source.*" BY metric_name $metadata_source_dim$
+| rename $metadata_source_dim$ as splunk_source
+| eval metric=case(
+    like(metric_name,"%.in_bytes"),"bytes_in",
+    like(metric_name,"%.out_bytes"),"bytes_out",
+    like(metric_name,"%.in_events"),"events_in",
+    like(metric_name,"%.out_events"),"events_out"
+  )
+| chart sum(metric_value) as value over splunk_source by metric
+| fillnull value=0
+| sort 0 - bytes_out - events_out - bytes_in - events_in
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">25</option>
+      </table>
+    </panel>
+
+    <panel>
+      <table>
+        <title>Dimension Discovery</title>
+        <search>
+          <query><![CDATA[
+| mcatalog values(_dims) as dims WHERE index=$index_tok$
+| mvexpand dims
+| rename dims as available_dimension
+| sort available_dimension
+          ]]></query>
+          <earliest>$time_tok.earliest$</earliest>
+          <latest>$time_tok.latest$</latest>
+        </search>
+        <option name="count">100</option>
+      </table>
+    </panel>
+  </row>
+</form>

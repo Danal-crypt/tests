@@ -1,0 +1,328 @@
+<form version="1.1">
+  <label>CIM Compliance by Data Model / Dataset / Sourcetype</label>
+
+  <init>
+    <set token="tok_selected_st">*</set>
+    <set token="tok_st_filter">*</set>
+    <set token="tok_summariesonly">false</set>
+  </init>
+
+  <fieldset submitButton="false">
+    <input type="time" token="tok_time">
+      <label>Time Range</label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+
+    <input type="dropdown" token="tok_dm" searchWhenChanged="true">
+      <label>Data Model</label>
+      <search>
+        <query><![CDATA[
+| datamodelsimple type=models
+| eval data_model=coalesce(modelName, datamodel, model, title, name)
+| where isnotnull(data_model) AND data_model!=""
+| dedup data_model
+| sort data_model
+| table data_model
+        ]]></query>
+      </search>
+      <fieldForLabel>data_model</fieldForLabel>
+      <fieldForValue>data_model</fieldForValue>
+      <selectFirstChoice>true</selectFirstChoice>
+      <change>
+        <set token="tok_selected_st">*</set>
+        <set token="tok_st_filter">*</set>
+      </change>
+    </input>
+
+    <input type="dropdown" token="tok_dataset" searchWhenChanged="true">
+      <label>Dataset</label>
+      <search>
+        <query><![CDATA[
+| datamodelsimple type=objects datamodel="$tok_dm$"
+| eval nodename=coalesce(objectName, nodename, object, name, title)
+| eval dataset=mvindex(split(nodename,"."),-1)
+| where isnotnull(dataset) AND dataset!=""
+| dedup dataset
+| sort dataset
+| table dataset
+        ]]></query>
+      </search>
+      <fieldForLabel>dataset</fieldForLabel>
+      <fieldForValue>dataset</fieldForValue>
+      <selectFirstChoice>true</selectFirstChoice>
+      <change>
+        <set token="tok_selected_st">*</set>
+        <set token="tok_st_filter">*</set>
+      </change>
+    </input>
+
+    <input type="dropdown" token="tok_st_filter" searchWhenChanged="true">
+      <label>Sourcetype Filter</label>
+      <choice value="*">All (*)</choice>
+      <search>
+        <query><![CDATA[
+| datamodel "$tok_dm$" "$tok_dataset$" flat strict_fields=false summariesonly=$tok_summariesonly$
+| stats count by sourcetype
+| where isnotnull(sourcetype) AND sourcetype!=""
+| sort sourcetype
+| table sourcetype
+        ]]></query>
+        <earliest>$tok_time.earliest$</earliest>
+        <latest>$tok_time.latest$</latest>
+      </search>
+      <fieldForLabel>sourcetype</fieldForLabel>
+      <fieldForValue>sourcetype</fieldForValue>
+      <default>*</default>
+      <change>
+        <set token="tok_selected_st">*</set>
+      </change>
+    </input>
+
+    <input type="radio" token="tok_summariesonly" searchWhenChanged="true">
+      <label>Acceleration Mode</label>
+      <choice value="false">All data</choice>
+      <choice value="true">Summaries only</choice>
+      <default>false</default>
+      <change>
+        <set token="tok_selected_st">*</set>
+        <set token="tok_st_filter">*</set>
+      </change>
+    </input>
+  </fieldset>
+
+  <row>
+    <panel>
+      <title>Events in Selected Dataset</title>
+      <single>
+        <search>
+          <query><![CDATA[
+| datamodel "$tok_dm$" "$tok_dataset$" flat strict_fields=false summariesonly=$tok_summariesonly$
+| eval st_filter="$tok_st_filter$"
+| where st_filter="*" OR sourcetype=st_filter
+| stats count as event_count
+          ]]></query>
+          <earliest>$tok_time.earliest$</earliest>
+          <latest>$tok_time.latest$</latest>
+        </search>
+      </single>
+    </panel>
+
+    <panel>
+      <title>Sourcetypes in Selected Dataset</title>
+      <single>
+        <search>
+          <query><![CDATA[
+| datamodel "$tok_dm$" "$tok_dataset$" flat strict_fields=false summariesonly=$tok_summariesonly$
+| eval st_filter="$tok_st_filter$"
+| where st_filter="*" OR sourcetype=st_filter
+| stats dc(sourcetype) as sourcetype_count
+          ]]></query>
+          <earliest>$tok_time.earliest$</earliest>
+          <latest>$tok_time.latest$</latest>
+        </search>
+      </single>
+    </panel>
+
+    <panel>
+      <title>Observed Fields in Selected Dataset</title>
+      <single>
+        <search>
+          <query><![CDATA[
+| datamodel "$tok_dm$" "$tok_dataset$" flat strict_fields=false summariesonly=$tok_summariesonly$
+| eval st_filter="$tok_st_filter$"
+| where st_filter="*" OR sourcetype=st_filter
+| fieldsummary
+| rename field as field_name
+| where NOT match(field_name,"^(?:_raw|_time|_indextime|linecount|punct|host|source|sourcetype|splunk_server|splunk_server_group|eventtype|tag)$")
+| stats count as field_count
+          ]]></query>
+          <earliest>$tok_time.earliest$</earliest>
+          <latest>$tok_time.latest$</latest>
+        </search>
+      </single>
+    </panel>
+
+    <panel>
+      <title>Dataset Search String</title>
+      <table>
+        <search>
+          <query><![CDATA[
+| datamodel "$tok_dm$" "$tok_dataset$" search_string
+          ]]></query>
+        </search>
+        <option name="count">5</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Sourcetypes Feeding Selected Dataset</title>
+      <table>
+        <search>
+          <query><![CDATA[
+| datamodel "$tok_dm$" "$tok_dataset$" flat strict_fields=false summariesonly=$tok_summariesonly$
+| stats count as events by sourcetype
+| where isnotnull(sourcetype) AND sourcetype!=""
+| sort - events sourcetype
+          ]]></query>
+          <earliest>$tok_time.earliest$</earliest>
+          <latest>$tok_time.latest$</latest>
+        </search>
+        <option name="count">20</option>
+        <option name="drilldown">row</option>
+        <drilldown>
+          <set token="tok_selected_st">$row.sourcetype$</set>
+          <set token="tok_st_filter">$row.sourcetype$</set>
+        </drilldown>
+      </table>
+    </panel>
+
+    <panel>
+      <title>Coverage by Sourcetype</title>
+      <table>
+        <search>
+          <query><![CDATA[
+| datamodel "$tok_dm$" "$tok_dataset$" flat strict_fields=false summariesonly=$tok_summariesonly$
+| eval st_filter="$tok_st_filter$"
+| where st_filter="*" OR sourcetype=st_filter
+| streamstats count as _rowid
+| eval event_key=sourcetype."::"._rowid
+| foreach * [
+    eval <<FIELD>>__present=if(isnull('<<FIELD>>') OR tostring('<<FIELD>>')="",0,1)
+  ]
+| fields event_key *__present
+| untable event_key metric value
+| eval sourcetype=mvindex(split(event_key,"::"),0)
+| eval field_name=replace(metric,"__present$","")
+| where NOT match(field_name,"^(?:event_key|_rowid|_raw|_time|_indextime|linecount|punct|host|source|sourcetype|splunk_server|splunk_server_group|eventtype|tag)$")
+| eventstats dc(event_key) as events by sourcetype
+| stats avg(value) as compliance_score min(value) as lowest_field_pct dc(field_name) as fields_checked max(events) as events by sourcetype
+| eval compliance_score=round(compliance_score*100,2)
+| eval lowest_field_pct=round(lowest_field_pct*100,2)
+| eval status=case(compliance_score>=90,"Good",compliance_score>=70,"Warning",true(),"Poor")
+| sort - compliance_score - events sourcetype
+          ]]></query>
+          <earliest>$tok_time.earliest$</earliest>
+          <latest>$tok_time.latest$</latest>
+        </search>
+        <option name="count">20</option>
+        <option name="drilldown">row</option>
+        <option name="wrap">true</option>
+
+        <format type="color" field="status">
+          <colorPalette type="map">{"Good":#65A637,"Warning":#F7BC38,"Poor":#D93F3C}</colorPalette>
+        </format>
+
+        <format type="color" field="compliance_score">
+          <scale type="threshold">70,90</scale>
+          <colorPalette type="list">[#D93F3C,#F7BC38,#65A637]</colorPalette>
+        </format>
+
+        <format type="color" field="lowest_field_pct">
+          <scale type="threshold">50,80</scale>
+          <colorPalette type="list">[#D93F3C,#F7BC38,#65A637]</colorPalette>
+        </format>
+
+        <format type="number" field="compliance_score">
+          <option name="precision">2</option>
+        </format>
+
+        <format type="number" field="lowest_field_pct">
+          <option name="precision">2</option>
+        </format>
+
+        <drilldown>
+          <set token="tok_selected_st">$row.sourcetype$</set>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Field Population for Selected Sourcetype ($tok_selected_st$)</title>
+      <table>
+        <search>
+          <query><![CDATA[
+| datamodel "$tok_dm$" "$tok_dataset$" flat strict_fields=false summariesonly=$tok_summariesonly$
+| eval selected_st="$tok_selected_st$", st_filter="$tok_st_filter$"
+| where (selected_st!="*" AND sourcetype=selected_st) OR (selected_st="*" AND (st_filter="*" OR sourcetype=st_filter))
+| streamstats count as _rowid
+| eval event_key=sourcetype."::"._rowid
+| foreach * [
+    eval <<FIELD>>__present=if(isnull('<<FIELD>>') OR tostring('<<FIELD>>')="",0,1)
+  ]
+| fields event_key *__present
+| untable event_key metric value
+| eval sourcetype=mvindex(split(event_key,"::"),0)
+| eval field_name=replace(metric,"__present$","")
+| where NOT match(field_name,"^(?:event_key|_rowid|_raw|_time|_indextime|linecount|punct|host|source|sourcetype|splunk_server|splunk_server_group|eventtype|tag)$")
+| stats avg(value) as population_pct by sourcetype field_name
+| eval population_pct=round(population_pct*100,2)
+| sort population_pct field_name
+          ]]></query>
+          <earliest>$tok_time.earliest$</earliest>
+          <latest>$tok_time.latest$</latest>
+        </search>
+        <option name="count">25</option>
+        <option name="wrap">true</option>
+
+        <format type="color" field="population_pct">
+          <scale type="threshold">50,80,95</scale>
+          <colorPalette type="list">[#D93F3C,#F7BC38,#6DB7C6,#65A637]</colorPalette>
+        </format>
+
+        <format type="number" field="population_pct">
+          <option name="precision">2</option>
+        </format>
+      </table>
+    </panel>
+
+    <panel>
+      <title>Observed Fields Summary</title>
+      <table>
+        <search>
+          <query><![CDATA[
+| datamodel "$tok_dm$" "$tok_dataset$" flat strict_fields=false summariesonly=$tok_summariesonly$
+| eval st_filter="$tok_st_filter$"
+| where st_filter="*" OR sourcetype=st_filter
+| fieldsummary
+| rename field as field_name count as nonnull_count distinct_count as distinct_values
+| where NOT match(field_name,"^(?:_raw|_time|_indextime|linecount|punct|host|source|sourcetype|splunk_server|splunk_server_group|eventtype|tag)$")
+| sort field_name
+| table field_name nonnull_count distinct_values is_exact
+          ]]></query>
+          <earliest>$tok_time.earliest$</earliest>
+          <latest>$tok_time.latest$</latest>
+        </search>
+        <option name="count">25</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Sample Events for Selected Dataset / Sourcetype</title>
+      <table>
+        <search>
+          <query><![CDATA[
+| datamodel "$tok_dm$" "$tok_dataset$" flat strict_fields=false summariesonly=$tok_summariesonly$
+| eval selected_st="$tok_selected_st$", st_filter="$tok_st_filter$"
+| where (selected_st!="*" AND sourcetype=selected_st) OR (selected_st="*" AND (st_filter="*" OR sourcetype=st_filter))
+| head 20
+          ]]></query>
+          <earliest>$tok_time.earliest$</earliest>
+          <latest>$tok_time.latest$</latest>
+        </search>
+        <option name="count">20</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>

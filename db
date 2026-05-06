@@ -877,3 +877,26 @@ Recommended fields:
 host,index,sourcetype,source,owner,criticality,environment,expected_frequency_minutes,notes
 server01,wineventlog,WinEventLog:Security,*,Windows Team,critical,prod,15,All Windows Security events from server01
 firewall01,network,pan:traffic,*,Network Team,critical,prod,5,Palo Alto traffic
+
+
+[DDHC 00A - Build Expected Data Sources Initial Inventory]
+disabled = 1
+description = One-time or periodic helper search to generate ddhc_expected_data_sources.csv from observed data. Review/tune owner, criticality, and frequency before enabling alerting.
+cron_schedule = 0 3 * * 0
+dispatch.earliest_time = -30d
+dispatch.latest_time = now
+search = | tstats summariesonly=false earliest(_time) as first_seen_epoch latest(_time) as last_seen_epoch count as event_count_30d where index=* earliest=-30d latest=now by index sourcetype host \
+| where event_count_30d > 0 \
+| eval source="*" \
+| eval first_seen=strftime(first_seen_epoch,"%F %T") \
+| eval last_seen=strftime(last_seen_epoch,"%F %T") \
+| eval days_seen=round((last_seen_epoch-first_seen_epoch)/86400,2) \
+| eval avg_events_per_day=round(event_count_30d/30,0) \
+| eval expected_frequency_minutes=case(avg_events_per_day>=1000000,5,avg_events_per_day>=100000,10,avg_events_per_day>=10000,15,avg_events_per_day>=1000,30,avg_events_per_day>=100,60,true(),1440) \
+| eval criticality=case(match(lower(sourcetype),"wineventlog:security|security|edr|crowdstrike|carbonblack|sentinel|defender|pan:traffic|firewall|ids|ips|dns|proxy|vpn|authentication|linux_secure|syslog"),"critical",avg_events_per_day>=100000,"high",avg_events_per_day>=10000,"medium",true(),"low") \
+| eval owner=case(match(lower(index." ".sourcetype),"wineventlog|windows|powershell"),"Windows Team",match(lower(index." ".sourcetype),"linux|unix|syslog|secure"),"Linux Team",match(lower(index." ".sourcetype),"pan|firewall|proxy|dns|vpn|network|cisco|asa|fortinet|palo"),"Network Team",match(lower(index." ".sourcetype),"edr|crowdstrike|carbonblack|sentinel|defender"),"Security Team",true(),"unknown") \
+| eval environment=case(match(lower(host),"prod|prd"),"prod",match(lower(host),"dev"),"dev",match(lower(host),"test|tst|qa"),"test",true(),"unknown") \
+| eval notes="Auto-generated from last 30 days of observed host/index/sourcetype activity. source is wildcarded as * to avoid false positives from rotating source paths." \
+| table host index sourcetype source owner criticality environment expected_frequency_minutes notes first_seen last_seen event_count_30d avg_events_per_day days_seen \
+| sort index sourcetype host \
+| outputlookup ddhc_expected_data_sources.csv

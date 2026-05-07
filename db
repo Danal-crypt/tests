@@ -37,11 +37,11 @@ description = Builds same-day-of-week index baselines for yesterday comparisons.
 cron_schedule = 10 1 * * *
 dispatch.earliest_time = -36d@d
 dispatch.latest_time = @d
-search = | tstats summariesonly=false count where index=* earliest=-36d@d latest=-1d@d by _time index span=1d \
-| eval baseline_dow=strftime(_time,"%A"), target_dow=strftime(relative_time(now(),"-1d@d"),"%A") \
-| where baseline_dow=target_dow \
-| stats count as baseline_days avg(count) as avg_count median(count) as median_count stdev(count) as stdev_count perc25(count) as p25 perc75(count) as p75 min(count) as min_count max(count) as max_count by index \
-| eval updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
+search = | tstats summariesonly=false count where index=* earliest=-36d@d latest=-1d@d by _time index span=1d
+| eval baseline_dow=strftime(_time,"%A"), target_dow=strftime(relative_time(now(),"-1d@d"),"%A")
+| where baseline_dow=target_dow
+| stats count as baseline_days avg(count) as avg_count median(count) as median_count stdev(count) as stdev_count perc25(count) as p25 perc75(count) as p75 min(count) as min_count max(count) as max_count by index
+| eval updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
 | outputlookup ddhc_index_daily_baseline.csv
 
 
@@ -51,11 +51,11 @@ description = Builds same-day-of-week index/sourcetype baselines for yesterday c
 cron_schedule = 20 1 * * *
 dispatch.earliest_time = -36d@d
 dispatch.latest_time = @d
-search = | tstats summariesonly=false count where index=* earliest=-36d@d latest=-1d@d by _time index sourcetype span=1d \
-| eval baseline_dow=strftime(_time,"%A"), target_dow=strftime(relative_time(now(),"-1d@d"),"%A") \
-| where baseline_dow=target_dow \
-| stats count as baseline_days avg(count) as avg_count median(count) as median_count stdev(count) as stdev_count perc25(count) as p25 perc75(count) as p75 min(count) as min_count max(count) as max_count by index sourcetype \
-| eval updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
+search = | tstats summariesonly=false count where index=* earliest=-36d@d latest=-1d@d by _time index sourcetype span=1d
+| eval baseline_dow=strftime(_time,"%A"), target_dow=strftime(relative_time(now(),"-1d@d"),"%A")
+| where baseline_dow=target_dow
+| stats count as baseline_days avg(count) as avg_count median(count) as median_count stdev(count) as stdev_count perc25(count) as p25 perc75(count) as p75 min(count) as min_count max(count) as max_count by index sourcetype
+| eval updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
 | outputlookup ddhc_sourcetype_daily_baseline.csv
 
 
@@ -65,13 +65,13 @@ description = Maintains exact-source and wildcard-source last-seen records for h
 cron_schedule = */15 * * * *
 dispatch.earliest_time = -14d
 dispatch.latest_time = now
-search = | tstats summariesonly=false latest(_time) as last_seen count as event_count_14d where index=* earliest=-14d latest=now by index sourcetype host source \
-| append [ | tstats summariesonly=false latest(_time) as last_seen count as event_count_14d where index=* earliest=-14d latest=now by index sourcetype host | eval source="*" ] \
-| eval event_count_24h=0 \
-| append [ | tstats summariesonly=false count as event_count_24h where index=* earliest=-24h latest=now by index sourcetype host source | eval last_seen=null(), event_count_14d=0 ] \
-| append [ | tstats summariesonly=false count as event_count_24h where index=* earliest=-24h latest=now by index sourcetype host | eval source="*", last_seen=null(), event_count_14d=0 ] \
-| stats max(last_seen) as last_seen sum(event_count_14d) as event_count_14d sum(event_count_24h) as event_count_24h by index sourcetype host source \
-| eval last_seen_readable=strftime(last_seen,"%F %T"), minutes_since_seen=round((now()-last_seen)/60,1), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
+search = | tstats summariesonly=false latest(_time) as last_seen count as event_count_14d where index=* earliest=-14d latest=now by index sourcetype host source
+| append [ | tstats summariesonly=false latest(_time) as last_seen count as event_count_14d where index=* earliest=-14d latest=now by index sourcetype host | eval source="*" ]
+| eval event_count_24h=0
+| append [ | tstats summariesonly=false count as event_count_24h where index=* earliest=-24h latest=now by index sourcetype host source | eval last_seen=null(), event_count_14d=0 ]
+| append [ | tstats summariesonly=false count as event_count_24h where index=* earliest=-24h latest=now by index sourcetype host | eval source="*", last_seen=null(), event_count_14d=0 ]
+| stats max(last_seen) as last_seen sum(event_count_14d) as event_count_14d sum(event_count_24h) as event_count_24h by index sourcetype host source
+| eval last_seen_readable=strftime(last_seen,"%F %T"), minutes_since_seen=round((now()-last_seen)/60,1), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
 | outputlookup ddhc_host_source_last_seen.csv
 
 
@@ -81,10 +81,10 @@ description = Projects today's index/sourcetype volume to help determine whether
 cron_schedule = 5 * * * *
 dispatch.earliest_time = @d
 dispatch.latest_time = now
-search = | tstats summariesonly=false count as today_count where index=* earliest=@d latest=now by index sourcetype \
-| eval hours_elapsed=round((now()-relative_time(now(),"@d"))/3600,2) \
-| eval projected_today=round((today_count/hours_elapsed)*24,0) \
-| eval updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
+search = | tstats summariesonly=false count as today_count where index=* earliest=@d latest=now by index sourcetype
+| eval hours_elapsed=round((now()-relative_time(now(),"@d"))/3600,2)
+| eval projected_today=round((today_count/hours_elapsed)*24,0)
+| eval updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
 | outputlookup ddhc_today_projection.csv
 
 
@@ -94,22 +94,22 @@ description = Detects index-level drops/spikes using same-day-of-week baseline, 
 cron_schedule = 30 1 * * *
 dispatch.earliest_time = -1d@d
 dispatch.latest_time = @d
-search = | tstats summariesonly=false count as yesterday_count where index=* earliest=-1d@d latest=@d by index \
-| lookup ddhc_index_daily_baseline.csv index OUTPUT baseline_days avg_count median_count stdev_count p25 p75 min_count max_count \
-| eval stdev_count=if(isnull(stdev_count) OR stdev_count=0,1,stdev_count), median_count=coalesce(median_count,0), avg_count=coalesce(avg_count,0) \
-| eval diff=yesterday_count-median_count, pct_change=round((diff/median_count)*100,2), zscore=round((yesterday_count-avg_count)/stdev_count,2), iqr=p75-p25, lower_bound=p25-(1.5*iqr), upper_bound=p75+(1.5*iqr) \
-| eval anomaly_type=case(yesterday_count=0 AND median_count>1000,"drop",yesterday_count<lower_bound AND pct_change<-50,"drop",yesterday_count>upper_bound AND pct_change>100,"spike",abs(zscore)>=3 AND yesterday_count>1000,"outlier",true(),"normal") \
-| where anomaly_type!="normal" \
-| lookup ddhc_today_projection.csv index OUTPUT projected_today as projected_today_index \
-| eval recovered=case(anomaly_type="drop" AND projected_today_index>=median_count*0.75,1,anomaly_type="spike" AND projected_today_index<=median_count*1.5,1,true(),0) \
-| eval severity=case(yesterday_count=0 AND median_count>10000,"critical",anomaly_type="drop" AND pct_change<-75,"critical",anomaly_type="drop","high",anomaly_type="spike" AND pct_change>300,"high",anomaly_type="spike","medium",true(),"low") \
-| eval category="index_volume", sourcetype="*", host="*", source="*", actual_value=yesterday_count, baseline_value=median_count \
-| eval finding="Index volume ".anomaly_type.": yesterday=".yesterday_count.", median=".median_count.", pct_change=".pct_change."%" \
-| eval likely_cause=case(anomaly_type="drop" AND recovered=0,"Index volume is still tracking below baseline today.",anomaly_type="drop" AND recovered=1,"Index volume dropped yesterday but appears recovered today.",anomaly_type="spike" AND recovered=0,"Index volume is still tracking above baseline today.",anomaly_type="spike" AND recovered=1,"Index volume spiked yesterday but appears recovered today.",true(),"Index-level statistical outlier detected.") \
-| eval recommended_action="Click the finding, review sourcetype/host/source contributors, then check correlated _internal and Cribl panels." \
-| eval first_seen=strftime(relative_time(now(),"-1d@d"),"%F %T"), last_seen=strftime(relative_time(now(),"@d"),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
-| eval finding_id=md5(category."|".index."|".sourcetype."|".anomaly_type."|".first_seen) \
-| table finding_id severity category anomaly_type index sourcetype host source finding actual_value baseline_value pct_change zscore lower_bound upper_bound recovered likely_cause recommended_action first_seen last_seen updated_epoch updated \
+search = | tstats summariesonly=false count as yesterday_count where index=* earliest=-1d@d latest=@d by index
+| lookup ddhc_index_daily_baseline.csv index OUTPUT baseline_days avg_count median_count stdev_count p25 p75 min_count max_count
+| eval stdev_count=if(isnull(stdev_count) OR stdev_count=0,1,stdev_count), median_count=coalesce(median_count,0), avg_count=coalesce(avg_count,0)
+| eval diff=yesterday_count-median_count, pct_change=round((diff/median_count)*100,2), zscore=round((yesterday_count-avg_count)/stdev_count,2), iqr=p75-p25, lower_bound=p25-(1.5*iqr), upper_bound=p75+(1.5*iqr)
+| eval anomaly_type=case(yesterday_count=0 AND median_count>1000,"drop",yesterday_count<lower_bound AND pct_change<-50,"drop",yesterday_count>upper_bound AND pct_change>100,"spike",abs(zscore)>=3 AND yesterday_count>1000,"outlier",true(),"normal")
+| where anomaly_type!="normal"
+| lookup ddhc_today_projection.csv index OUTPUT projected_today as projected_today_index
+| eval recovered=case(anomaly_type="drop" AND projected_today_index>=median_count*0.75,1,anomaly_type="spike" AND projected_today_index<=median_count*1.5,1,true(),0)
+| eval severity=case(yesterday_count=0 AND median_count>10000,"critical",anomaly_type="drop" AND pct_change<-75,"critical",anomaly_type="drop","high",anomaly_type="spike" AND pct_change>300,"high",anomaly_type="spike","medium",true(),"low")
+| eval category="index_volume", sourcetype="*", host="*", source="*", actual_value=yesterday_count, baseline_value=median_count
+| eval finding="Index volume ".anomaly_type.": yesterday=".yesterday_count.", median=".median_count.", pct_change=".pct_change."%"
+| eval likely_cause=case(anomaly_type="drop" AND recovered=0,"Index volume is still tracking below baseline today.",anomaly_type="drop" AND recovered=1,"Index volume dropped yesterday but appears recovered today.",anomaly_type="spike" AND recovered=0,"Index volume is still tracking above baseline today.",anomaly_type="spike" AND recovered=1,"Index volume spiked yesterday but appears recovered today.",true(),"Index-level statistical outlier detected.")
+| eval recommended_action="Click the finding, review sourcetype/host/source contributors, then check correlated _internal and Cribl panels."
+| eval first_seen=strftime(relative_time(now(),"-1d@d"),"%F %T"), last_seen=strftime(relative_time(now(),"@d"),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
+| eval finding_id=md5(category."|".index."|".sourcetype."|".anomaly_type."|".first_seen)
+| table finding_id severity category anomaly_type index sourcetype host source finding actual_value baseline_value pct_change zscore lower_bound upper_bound recovered likely_cause recommended_action first_seen last_seen updated_epoch updated
 | outputlookup ddhc_index_anomalies.csv
 
 
@@ -119,22 +119,22 @@ description = Detects sourcetype-level drops/spikes using same-day-of-week basel
 cron_schedule = 40 1 * * *
 dispatch.earliest_time = -1d@d
 dispatch.latest_time = @d
-search = | tstats summariesonly=false count as yesterday_count where index=* earliest=-1d@d latest=@d by index sourcetype \
-| lookup ddhc_sourcetype_daily_baseline.csv index sourcetype OUTPUT baseline_days avg_count median_count stdev_count p25 p75 min_count max_count \
-| eval stdev_count=if(isnull(stdev_count) OR stdev_count=0,1,stdev_count), median_count=coalesce(median_count,0), avg_count=coalesce(avg_count,0) \
-| eval diff=yesterday_count-median_count, pct_change=round((diff/median_count)*100,2), zscore=round((yesterday_count-avg_count)/stdev_count,2), iqr=p75-p25, lower_bound=p25-(1.5*iqr), upper_bound=p75+(1.5*iqr) \
-| eval anomaly_type=case(yesterday_count=0 AND median_count>1000,"drop",yesterday_count<lower_bound AND pct_change<-50,"drop",yesterday_count>upper_bound AND pct_change>100,"spike",abs(zscore)>=3 AND yesterday_count>1000,"outlier",true(),"normal") \
-| where anomaly_type!="normal" \
-| lookup ddhc_today_projection.csv index sourcetype OUTPUT projected_today \
-| eval recovered=case(anomaly_type="drop" AND projected_today>=median_count*0.75,1,anomaly_type="spike" AND projected_today<=median_count*1.5,1,true(),0) \
-| eval severity=case(yesterday_count=0 AND median_count>10000,"critical",anomaly_type="drop" AND pct_change<-75,"critical",anomaly_type="drop","high",anomaly_type="spike" AND pct_change>300,"high",anomaly_type="spike","medium",true(),"low") \
-| eval category="sourcetype_volume", host="*", source="*", actual_value=yesterday_count, baseline_value=median_count \
-| eval finding="Sourcetype volume ".anomaly_type.": yesterday=".yesterday_count.", median=".median_count.", pct_change=".pct_change."%" \
-| eval likely_cause=case(anomaly_type="drop" AND recovered=0,"Sourcetype is still tracking below baseline today.",anomaly_type="drop" AND recovered=1,"Sourcetype dropped yesterday but appears recovered today.",anomaly_type="spike" AND recovered=0,"Sourcetype is still tracking above baseline today.",anomaly_type="spike" AND recovered=1,"Sourcetype spiked yesterday but appears recovered today.",true(),"Sourcetype-level statistical outlier detected.") \
-| eval recommended_action="Click the finding, review top hosts/sources, then check correlated _internal and Cribl panels." \
-| eval first_seen=strftime(relative_time(now(),"-1d@d"),"%F %T"), last_seen=strftime(relative_time(now(),"@d"),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
-| eval finding_id=md5(category."|".index."|".sourcetype."|".anomaly_type."|".first_seen) \
-| table finding_id severity category anomaly_type index sourcetype host source finding actual_value baseline_value pct_change zscore lower_bound upper_bound recovered likely_cause recommended_action first_seen last_seen updated_epoch updated \
+search = | tstats summariesonly=false count as yesterday_count where index=* earliest=-1d@d latest=@d by index sourcetype
+| lookup ddhc_sourcetype_daily_baseline.csv index sourcetype OUTPUT baseline_days avg_count median_count stdev_count p25 p75 min_count max_count
+| eval stdev_count=if(isnull(stdev_count) OR stdev_count=0,1,stdev_count), median_count=coalesce(median_count,0), avg_count=coalesce(avg_count,0)
+| eval diff=yesterday_count-median_count, pct_change=round((diff/median_count)*100,2), zscore=round((yesterday_count-avg_count)/stdev_count,2), iqr=p75-p25, lower_bound=p25-(1.5*iqr), upper_bound=p75+(1.5*iqr)
+| eval anomaly_type=case(yesterday_count=0 AND median_count>1000,"drop",yesterday_count<lower_bound AND pct_change<-50,"drop",yesterday_count>upper_bound AND pct_change>100,"spike",abs(zscore)>=3 AND yesterday_count>1000,"outlier",true(),"normal")
+| where anomaly_type!="normal"
+| lookup ddhc_today_projection.csv index sourcetype OUTPUT projected_today
+| eval recovered=case(anomaly_type="drop" AND projected_today>=median_count*0.75,1,anomaly_type="spike" AND projected_today<=median_count*1.5,1,true(),0)
+| eval severity=case(yesterday_count=0 AND median_count>10000,"critical",anomaly_type="drop" AND pct_change<-75,"critical",anomaly_type="drop","high",anomaly_type="spike" AND pct_change>300,"high",anomaly_type="spike","medium",true(),"low")
+| eval category="sourcetype_volume", host="*", source="*", actual_value=yesterday_count, baseline_value=median_count
+| eval finding="Sourcetype volume ".anomaly_type.": yesterday=".yesterday_count.", median=".median_count.", pct_change=".pct_change."%"
+| eval likely_cause=case(anomaly_type="drop" AND recovered=0,"Sourcetype is still tracking below baseline today.",anomaly_type="drop" AND recovered=1,"Sourcetype dropped yesterday but appears recovered today.",anomaly_type="spike" AND recovered=0,"Sourcetype is still tracking above baseline today.",anomaly_type="spike" AND recovered=1,"Sourcetype spiked yesterday but appears recovered today.",true(),"Sourcetype-level statistical outlier detected.")
+| eval recommended_action="Click the finding, review top hosts/sources, then check correlated _internal and Cribl panels."
+| eval first_seen=strftime(relative_time(now(),"-1d@d"),"%F %T"), last_seen=strftime(relative_time(now(),"@d"),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
+| eval finding_id=md5(category."|".index."|".sourcetype."|".anomaly_type."|".first_seen)
+| table finding_id severity category anomaly_type index sourcetype host source finding actual_value baseline_value pct_change zscore lower_bound upper_bound recovered likely_cause recommended_action first_seen last_seen updated_epoch updated
 | outputlookup ddhc_sourcetype_anomalies.csv
 
 
@@ -144,19 +144,19 @@ description = Compares ddhc_expected_data_sources.csv against last-seen records.
 cron_schedule = */15 * * * *
 dispatch.earliest_time = -15m
 dispatch.latest_time = now
-search = | inputlookup ddhc_expected_data_sources.csv \
-| eval source=coalesce(source,"*"), expected_frequency_minutes=coalesce(expected_frequency_minutes,60), criticality=lower(coalesce(criticality,"medium")), owner=coalesce(owner,"unknown"), environment=coalesce(environment,"unknown") \
-| lookup ddhc_host_source_last_seen.csv index sourcetype host source OUTPUT last_seen_readable as last_seen minutes_since_seen event_count_24h \
-| eval status=case(isnull(last_seen),"never_seen",minutes_since_seen>expected_frequency_minutes*4,"late",event_count_24h=0,"no_events_24h",true(),"healthy") \
-| where status!="healthy" \
-| eval severity=case(criticality="critical","critical",criticality="high","high",status="never_seen","high",true(),"medium") \
-| eval category="missing_expected_source", anomaly_type="drop", actual_value=event_count_24h, baseline_value=expected_frequency_minutes, pct_change=null(), zscore=null(), recovered=0 \
-| eval finding="Expected data source status=".status."; minutes_since_seen=".coalesce(minutes_since_seen,"null")."; expected_frequency_minutes=".expected_frequency_minutes \
-| eval likely_cause=case(status="never_seen","Expected data source has not been observed in the last-seen lookup.",status="late","Expected data source is late based on configured expected_frequency_minutes.",status="no_events_24h","Expected data source has no events in the last 24 hours.",true(),"Expected data source is unhealthy.") \
-| eval recommended_action="Check source application, forwarder service, outputs.conf, deployment status, network path, and upstream collector/Cribl route." \
-| eval first_seen=strftime(now(),"%F %T"), last_seen=coalesce(last_seen,"never_seen"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
-| eval finding_id=md5(category."|".index."|".sourcetype."|".host."|".source) \
-| table finding_id severity category anomaly_type index sourcetype host source owner criticality environment status finding actual_value baseline_value pct_change zscore recovered likely_cause recommended_action first_seen last_seen minutes_since_seen event_count_24h expected_frequency_minutes updated_epoch updated \
+search = | inputlookup ddhc_expected_data_sources.csv
+| eval source=coalesce(source,"*"), expected_frequency_minutes=coalesce(expected_frequency_minutes,60), criticality=lower(coalesce(criticality,"medium")), owner=coalesce(owner,"unknown"), environment=coalesce(environment,"unknown")
+| lookup ddhc_host_source_last_seen.csv index sourcetype host source OUTPUT last_seen_readable as last_seen minutes_since_seen event_count_24h
+| eval status=case(isnull(last_seen),"never_seen",minutes_since_seen>expected_frequency_minutes*4,"late",event_count_24h=0,"no_events_24h",true(),"healthy")
+| where status!="healthy"
+| eval severity=case(criticality="critical","critical",criticality="high","high",status="never_seen","high",true(),"medium")
+| eval category="missing_expected_source", anomaly_type="drop", actual_value=event_count_24h, baseline_value=expected_frequency_minutes, pct_change=null(), zscore=null(), recovered=0
+| eval finding="Expected data source status=".status."; minutes_since_seen=".coalesce(minutes_since_seen,"null")."; expected_frequency_minutes=".expected_frequency_minutes
+| eval likely_cause=case(status="never_seen","Expected data source has not been observed in the last-seen lookup.",status="late","Expected data source is late based on configured expected_frequency_minutes.",status="no_events_24h","Expected data source has no events in the last 24 hours.",true(),"Expected data source is unhealthy.")
+| eval recommended_action="Check source application, forwarder service, outputs.conf, deployment status, network path, and upstream collector/Cribl route."
+| eval first_seen=strftime(now(),"%F %T"), last_seen=coalesce(last_seen,"never_seen"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
+| eval finding_id=md5(category."|".index."|".sourcetype."|".host."|".source)
+| table finding_id severity category anomaly_type index sourcetype host source owner criticality environment status finding actual_value baseline_value pct_change zscore recovered likely_cause recommended_action first_seen last_seen minutes_since_seen event_count_24h expected_frequency_minutes updated_epoch updated
 | outputlookup ddhc_missing_expected_sources.csv
 
 
@@ -166,17 +166,17 @@ description = Detects new index/sourcetype/host/source combinations first seen i
 cron_schedule = 15 * * * *
 dispatch.earliest_time = -31d
 dispatch.latest_time = now
-search = | tstats summariesonly=false earliest(_time) as first_seen_epoch latest(_time) as last_seen_epoch count where index=* earliest=-31d latest=now by index sourcetype host source \
-| where first_seen_epoch>=relative_time(now(),"-24h") \
-| eval severity=case(count>1000000,"high",count>100000,"medium",true(),"informational") \
-| eval category="new_data", anomaly_type="new", actual_value=count, baseline_value=0, pct_change=null(), zscore=null(), recovered=0 \
-| eval first_seen=strftime(first_seen_epoch,"%F %T"), last_seen=strftime(last_seen_epoch,"%F %T") \
-| eval finding="New index/sourcetype/host/source combination observed with count=".count \
-| eval likely_cause="Newly onboarded data, changed sourcetype/source, misrouting, or previously silent source returned." \
-| eval recommended_action="Verify this is expected onboarding or an approved data routing/sourcetype change." \
-| eval owner="unknown", updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
-| eval finding_id=md5(category."|".index."|".sourcetype."|".host."|".source."|".first_seen) \
-| table finding_id severity category anomaly_type index sourcetype host source finding actual_value baseline_value pct_change zscore recovered likely_cause recommended_action owner first_seen last_seen updated_epoch updated count \
+search = | tstats summariesonly=false earliest(_time) as first_seen_epoch latest(_time) as last_seen_epoch count where index=* earliest=-31d latest=now by index sourcetype host source
+| where first_seen_epoch>=relative_time(now(),"-24h")
+| eval severity=case(count>1000000,"high",count>100000,"medium",true(),"informational")
+| eval category="new_data", anomaly_type="new", actual_value=count, baseline_value=0, pct_change=null(), zscore=null(), recovered=0
+| eval first_seen=strftime(first_seen_epoch,"%F %T"), last_seen=strftime(last_seen_epoch,"%F %T")
+| eval finding="New index/sourcetype/host/source combination observed with count=".count
+| eval likely_cause="Newly onboarded data, changed sourcetype/source, misrouting, or previously silent source returned."
+| eval recommended_action="Verify this is expected onboarding or an approved data routing/sourcetype change."
+| eval owner="unknown", updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
+| eval finding_id=md5(category."|".index."|".sourcetype."|".host."|".source."|".first_seen)
+| table finding_id severity category anomaly_type index sourcetype host source finding actual_value baseline_value pct_change zscore recovered likely_cause recommended_action owner first_seen last_seen updated_epoch updated count
 | outputlookup ddhc_new_data.csv
 
 
@@ -186,19 +186,19 @@ description = Summarizes Splunk internal errors and classifies them by common op
 cron_schedule = */15 * * * *
 dispatch.earliest_time = -24h
 dispatch.latest_time = now
-search = index=_internal earliest=-24h latest=now (error OR warn OR warning OR failed OR failure OR timeout OR blocked OR refused OR reset OR SSL OR certificate OR handshake OR queue OR license) \
-| eval raw_l=lower(_raw) \
-| eval error_category=case(match(raw_l,"ssl|certificate|handshake|tls"),"ssl_tls_certificate",match(raw_l,"tcpoutputproc|autoloadbalancedconnectionstrategy|connection refused|connection reset|cooked connection"),"forwarder_output_connection",match(raw_l,"tcpinputproc|tcpinputconfig"),"receiver_tcp_input",match(raw_l,"queue|blocked"),"queue_blockage",match(raw_l,"license"),"license",match(raw_l,"truncat|linebreaking|dateparser|timestamp|parse"),"parsing_timestamp",match(raw_l,"scheduler|skipped|savedsearch"),"scheduler",true(),"general_internal") \
-| eval severity=case(error_category="ssl_tls_certificate","high",error_category="queue_blockage","high",error_category="license","high",error_category="forwarder_output_connection","medium",error_category="receiver_tcp_input","medium",true(),"low") \
-| stats count latest(_raw) as latest_error latest(_time) as latest_time_epoch by severity error_category host component log_level \
-| eval latest_time=strftime(latest_time_epoch,"%F %T") \
-| eval category="internal_error", anomaly_type="error", index="*", sourcetype="*", source="*", actual_value=count, baseline_value=0, pct_change=null(), zscore=null(), recovered=0 \
-| eval finding="Splunk internal ".error_category." errors observed on ".host."; count=".count \
-| eval likely_cause=case(error_category="ssl_tls_certificate","TLS/certificate/trust chain or name validation problem.",error_category="queue_blockage","Possible indexing/forwarding/processing backpressure.",error_category="license","License pool/usage warning or violation.",error_category="forwarder_output_connection","Forwarder cannot reliably reach receiver/destination.",error_category="receiver_tcp_input","Receiver/TCP input issue on Splunk tier.",error_category="parsing_timestamp","Parsing, line-breaking, timestamping, or truncation issue.",true(),"Internal Splunk warning/error requires review.") \
-| eval recommended_action="Open latest_error, identify affected tier, then correlate to data drops/spikes and host/source last-seen panels." \
-| eval first_seen=strftime(relative_time(now(),"-24h"),"%F %T"), last_seen=latest_time, updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
-| eval finding_id=md5(category."|".error_category."|".host."|".component."|".log_level) \
-| table finding_id severity category anomaly_type index sourcetype host source component log_level error_category finding actual_value baseline_value pct_change zscore recovered likely_cause recommended_action latest_error first_seen last_seen latest_time updated_epoch updated count \
+search = index=_internal earliest=-24h latest=now (error OR warn OR warning OR failed OR failure OR timeout OR blocked OR refused OR reset OR SSL OR certificate OR handshake OR queue OR license)
+| eval raw_l=lower(_raw)
+| eval error_category=case(match(raw_l,"ssl|certificate|handshake|tls"),"ssl_tls_certificate",match(raw_l,"tcpoutputproc|autoloadbalancedconnectionstrategy|connection refused|connection reset|cooked connection"),"forwarder_output_connection",match(raw_l,"tcpinputproc|tcpinputconfig"),"receiver_tcp_input",match(raw_l,"queue|blocked"),"queue_blockage",match(raw_l,"license"),"license",match(raw_l,"truncat|linebreaking|dateparser|timestamp|parse"),"parsing_timestamp",match(raw_l,"scheduler|skipped|savedsearch"),"scheduler",true(),"general_internal")
+| eval severity=case(error_category="ssl_tls_certificate","high",error_category="queue_blockage","high",error_category="license","high",error_category="forwarder_output_connection","medium",error_category="receiver_tcp_input","medium",true(),"low")
+| stats count latest(_raw) as latest_error latest(_time) as latest_time_epoch by severity error_category host component log_level
+| eval latest_time=strftime(latest_time_epoch,"%F %T")
+| eval category="internal_error", anomaly_type="error", index="*", sourcetype="*", source="*", actual_value=count, baseline_value=0, pct_change=null(), zscore=null(), recovered=0
+| eval finding="Splunk internal ".error_category." errors observed on ".host."; count=".count
+| eval likely_cause=case(error_category="ssl_tls_certificate","TLS/certificate/trust chain or name validation problem.",error_category="queue_blockage","Possible indexing/forwarding/processing backpressure.",error_category="license","License pool/usage warning or violation.",error_category="forwarder_output_connection","Forwarder cannot reliably reach receiver/destination.",error_category="receiver_tcp_input","Receiver/TCP input issue on Splunk tier.",error_category="parsing_timestamp","Parsing, line-breaking, timestamping, or truncation issue.",true(),"Internal Splunk warning/error requires review.")
+| eval recommended_action="Open latest_error, identify affected tier, then correlate to data drops/spikes and host/source last-seen panels."
+| eval first_seen=strftime(relative_time(now(),"-24h"),"%F %T"), last_seen=latest_time, updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
+| eval finding_id=md5(category."|".error_category."|".host."|".component."|".log_level)
+| table finding_id severity category anomaly_type index sourcetype host source component log_level error_category finding actual_value baseline_value pct_change zscore recovered likely_cause recommended_action latest_error first_seen last_seen latest_time updated_epoch updated count
 | outputlookup ddhc_internal_error_summary.csv
 
 
@@ -208,19 +208,19 @@ description = Detects future-dated events, late-arriving data, suspicious source
 cron_schedule = 25 * * * *
 dispatch.earliest_time = -24h
 dispatch.latest_time = now
-search = | tstats summariesonly=false count where index=* earliest=-24h latest=+7d by index sourcetype host _time span=1h \
-| where _time>now()+300 \
-| stats sum(count) as count min(_time) as min_bad_time max(_time) as max_bad_time by index sourcetype host \
-| eval quality_category="future_dated_events", metric_value=strftime(max_bad_time,"%F %T"), severity=case(count>100000,"high",count>10000,"medium",true(),"low") \
-| append [ search index=* earliest=-24h latest=now | eval lag_seconds=_indextime-_time | where lag_seconds>3600 | stats count avg(lag_seconds) as avg_lag max(lag_seconds) as max_lag by index sourcetype host | eval quality_category="late_arriving_data", metric_value=round(max_lag/3600,2)." hours max lag", severity=case(max_lag>86400,"high",max_lag>21600,"medium",true(),"low") ] \
-| append [ | tstats summariesonly=false count where index=* earliest=-24h latest=now by index sourcetype host | where sourcetype IN ("too_small","stash","unknown","syslog","csv","json","_json","default") | eval quality_category="suspicious_sourcetype", metric_value=sourcetype, severity=case(count>100000,"medium",true(),"low") ] \
-| eval category="data_quality", anomaly_type="quality", source="*", actual_value=count, baseline_value=0, pct_change=null(), zscore=null(), recovered=0 \
-| eval finding=case(quality_category="future_dated_events","Events have _time in the future.",quality_category="late_arriving_data","Events are arriving more than one hour late.",quality_category="suspicious_sourcetype","Potential generic/default/bad sourcetype observed.",true(),"Data quality issue observed.") \
-| eval likely_cause=case(quality_category="future_dated_events","Source clock, timezone, timestamp extraction, or props issue.",quality_category="late_arriving_data","Backlog, replay, delayed source delivery, queueing, or timestamp issue.",quality_category="suspicious_sourcetype","Misrouted data, missing props/transforms, source type override issue, or default assignment.",true(),"Data quality issue requires review.") \
-| eval recommended_action="Review raw events, source clock/timestamp format, props/transforms, Cribl routing, and ingestion path." \
-| eval owner="unknown", first_seen=strftime(relative_time(now(),"-24h"),"%F %T"), last_seen=strftime(now(),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
-| eval finding_id=md5(category."|".quality_category."|".index."|".sourcetype."|".host) \
-| table finding_id severity category anomaly_type quality_category index sourcetype host source finding actual_value baseline_value pct_change zscore metric_value recovered likely_cause recommended_action owner first_seen last_seen updated_epoch updated count \
+search = | tstats summariesonly=false count where index=* earliest=-24h latest=+7d by index sourcetype host _time span=1h
+| where _time>now()+300
+| stats sum(count) as count min(_time) as min_bad_time max(_time) as max_bad_time by index sourcetype host
+| eval quality_category="future_dated_events", metric_value=strftime(max_bad_time,"%F %T"), severity=case(count>100000,"high",count>10000,"medium",true(),"low")
+| append [ search index=* earliest=-24h latest=now | eval lag_seconds=_indextime-_time | where lag_seconds>3600 | stats count avg(lag_seconds) as avg_lag max(lag_seconds) as max_lag by index sourcetype host | eval quality_category="late_arriving_data", metric_value=round(max_lag/3600,2)." hours max lag", severity=case(max_lag>86400,"high",max_lag>21600,"medium",true(),"low") ]
+| append [ | tstats summariesonly=false count where index=* earliest=-24h latest=now by index sourcetype host | where sourcetype IN ("too_small","stash","unknown","syslog","csv","json","_json","default") | eval quality_category="suspicious_sourcetype", metric_value=sourcetype, severity=case(count>100000,"medium",true(),"low") ]
+| eval category="data_quality", anomaly_type="quality", source="*", actual_value=count, baseline_value=0, pct_change=null(), zscore=null(), recovered=0
+| eval finding=case(quality_category="future_dated_events","Events have _time in the future.",quality_category="late_arriving_data","Events are arriving more than one hour late.",quality_category="suspicious_sourcetype","Potential generic/default/bad sourcetype observed.",true(),"Data quality issue observed.")
+| eval likely_cause=case(quality_category="future_dated_events","Source clock, timezone, timestamp extraction, or props issue.",quality_category="late_arriving_data","Backlog, replay, delayed source delivery, queueing, or timestamp issue.",quality_category="suspicious_sourcetype","Misrouted data, missing props/transforms, source type override issue, or default assignment.",true(),"Data quality issue requires review.")
+| eval recommended_action="Review raw events, source clock/timestamp format, props/transforms, Cribl routing, and ingestion path."
+| eval owner="unknown", first_seen=strftime(relative_time(now(),"-24h"),"%F %T"), last_seen=strftime(now(),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
+| eval finding_id=md5(category."|".quality_category."|".index."|".sourcetype."|".host)
+| table finding_id severity category anomaly_type quality_category index sourcetype host source finding actual_value baseline_value pct_change zscore metric_value recovered likely_cause recommended_action owner first_seen last_seen updated_epoch updated count
 | outputlookup ddhc_data_quality.csv
 
 
@@ -230,20 +230,20 @@ description = Optional Cribl health summary. Adjust field names to your criblmet
 cron_schedule = */15 * * * *
 dispatch.earliest_time = -24h
 dispatch.latest_time = now
-search = index=criblmetrics earliest=-24h latest=now \
-| eval cribl_category=case(match(lower(_raw),"error|failed|exception|refused|reset|timeout|unhealthy"),"cribl_error",isnotnull(bytes_in) OR isnotnull(bytes_out),"cribl_volume",true(),"cribl_metric") \
-| eval route=coalesce(route,Route,cribl_route,"unknown"), pipeline=coalesce(pipeline,Pipeline,cribl_pipeline,"unknown"), destination=coalesce(dest,destination,output,cribl_dest,"unknown") \
-| stats count sum(bytes_in) as bytes_in sum(bytes_out) as bytes_out latest(_raw) as latest_error latest(_time) as latest_time_epoch by cribl_category host route pipeline destination \
-| eval bytes_in=coalesce(bytes_in,0), bytes_out=coalesce(bytes_out,0), drop_pct=if(bytes_in>0,round(((bytes_in-bytes_out)/bytes_in)*100,2),null()) \
-| where cribl_category="cribl_error" OR drop_pct>20 \
-| eval severity=case(cribl_category="cribl_error" AND count>100,"high",drop_pct>80,"critical",drop_pct>50,"high",drop_pct>20,"medium",true(),"low") \
-| eval category="cribl_health", anomaly_type=case(cribl_category="cribl_error","error",true(),"drop"), index="*", sourcetype="*", source="*", actual_value=coalesce(bytes_out,count), baseline_value=bytes_in, pct_change=drop_pct, zscore=null(), recovered=0 \
-| eval finding=case(cribl_category="cribl_error","Cribl errors observed. count=".count,"Cribl bytes_out appears lower than bytes_in. drop_pct=".drop_pct."%",true(),"Cribl health issue observed.") \
-| eval likely_cause="Cribl route, pipeline, destination, network, TLS, or output backpressure issue." \
-| eval recommended_action="Check Cribl worker/group health, route, pipeline, destination config, TLS status, and destination availability." \
-| eval latest_time=strftime(latest_time_epoch,"%F %T"), first_seen=strftime(relative_time(now(),"-24h"),"%F %T"), last_seen=latest_time, owner="unknown", updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
-| eval finding_id=md5(category."|".cribl_category."|".host."|".route."|".pipeline."|".destination) \
-| table finding_id severity category anomaly_type cribl_category index sourcetype host source route pipeline destination finding actual_value baseline_value pct_change zscore recovered likely_cause recommended_action latest_error first_seen last_seen latest_time updated_epoch updated count bytes_in bytes_out drop_pct \
+search = index=criblmetrics earliest=-24h latest=now
+| eval cribl_category=case(match(lower(_raw),"error|failed|exception|refused|reset|timeout|unhealthy"),"cribl_error",isnotnull(bytes_in) OR isnotnull(bytes_out),"cribl_volume",true(),"cribl_metric")
+| eval route=coalesce(route,Route,cribl_route,"unknown"), pipeline=coalesce(pipeline,Pipeline,cribl_pipeline,"unknown"), destination=coalesce(dest,destination,output,cribl_dest,"unknown")
+| stats count sum(bytes_in) as bytes_in sum(bytes_out) as bytes_out latest(_raw) as latest_error latest(_time) as latest_time_epoch by cribl_category host route pipeline destination
+| eval bytes_in=coalesce(bytes_in,0), bytes_out=coalesce(bytes_out,0), drop_pct=if(bytes_in>0,round(((bytes_in-bytes_out)/bytes_in)*100,2),null())
+| where cribl_category="cribl_error" OR drop_pct>20
+| eval severity=case(cribl_category="cribl_error" AND count>100,"high",drop_pct>80,"critical",drop_pct>50,"high",drop_pct>20,"medium",true(),"low")
+| eval category="cribl_health", anomaly_type=case(cribl_category="cribl_error","error",true(),"drop"), index="*", sourcetype="*", source="*", actual_value=coalesce(bytes_out,count), baseline_value=bytes_in, pct_change=drop_pct, zscore=null(), recovered=0
+| eval finding=case(cribl_category="cribl_error","Cribl errors observed. count=".count,"Cribl bytes_out appears lower than bytes_in. drop_pct=".drop_pct."%",true(),"Cribl health issue observed.")
+| eval likely_cause="Cribl route, pipeline, destination, network, TLS, or output backpressure issue."
+| eval recommended_action="Check Cribl worker/group health, route, pipeline, destination config, TLS status, and destination availability."
+| eval latest_time=strftime(latest_time_epoch,"%F %T"), first_seen=strftime(relative_time(now(),"-24h"),"%F %T"), last_seen=latest_time, owner="unknown", updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
+| eval finding_id=md5(category."|".cribl_category."|".host."|".route."|".pipeline."|".destination)
+| table finding_id severity category anomaly_type cribl_category index sourcetype host source route pipeline destination finding actual_value baseline_value pct_change zscore recovered likely_cause recommended_action latest_error first_seen last_seen latest_time updated_epoch updated count bytes_in bytes_out drop_pct
 | outputlookup ddhc_cribl_health_summary.csv
 
 
@@ -253,26 +253,26 @@ description = Combines all DDHC lookup outputs into a single normalized findings
 cron_schedule = */15 * * * *
 dispatch.earliest_time = -15m
 dispatch.latest_time = now
-search = | inputlookup ddhc_index_anomalies.csv \
-| append [ | inputlookup ddhc_sourcetype_anomalies.csv ] \
-| append [ | inputlookup ddhc_missing_expected_sources.csv ] \
-| append [ | inputlookup ddhc_new_data.csv ] \
-| append [ | inputlookup ddhc_internal_error_summary.csv ] \
-| append [ | inputlookup ddhc_data_quality.csv ] \
-| append [ | inputlookup ddhc_cribl_health_summary.csv ] \
-| eval finding_id=coalesce(finding_id,md5(category."|".index."|".sourcetype."|".host."|".source."|".finding)) \
-| eval owner=coalesce(owner,"unknown"), status="new" \
-| lookup ddhc_finding_status.csv finding_id OUTPUT status as analyst_status analyst comment last_updated \
-| eval status=coalesce(analyst_status,status) \
-| eval severity=lower(coalesce(severity,"informational")), category=coalesce(category,"uncategorized"), anomaly_type=coalesce(anomaly_type,"unknown") \
-| eval index=coalesce(index,"*"), sourcetype=coalesce(sourcetype,"*"), host=coalesce(host,"*"), source=coalesce(source,"*") \
-| eval evidence=case(category="internal_error",latest_error,category="cribl_health",latest_error,true(),coalesce(evidence,"")) \
-| eval updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
-| table finding_id severity category anomaly_type index sourcetype host source component log_level error_category quality_category cribl_category route pipeline destination finding actual_value baseline_value pct_change zscore recovered likely_cause recommended_action evidence owner status analyst comment first_seen last_seen updated_epoch updated \
+search = | inputlookup ddhc_index_anomalies.csv
+| append [ | inputlookup ddhc_sourcetype_anomalies.csv ]
+| append [ | inputlookup ddhc_missing_expected_sources.csv ]
+| append [ | inputlookup ddhc_new_data.csv ]
+| append [ | inputlookup ddhc_internal_error_summary.csv ]
+| append [ | inputlookup ddhc_data_quality.csv ]
+| append [ | inputlookup ddhc_cribl_health_summary.csv ]
+| eval finding_id=coalesce(finding_id,md5(category."|".index."|".sourcetype."|".host."|".source."|".finding))
+| eval owner=coalesce(owner,"unknown"), status="new"
+| lookup ddhc_finding_status.csv finding_id OUTPUT status as analyst_status analyst comment last_updated
+| eval status=coalesce(analyst_status,status)
+| eval severity=lower(coalesce(severity,"informational")), category=coalesce(category,"uncategorized"), anomaly_type=coalesce(anomaly_type,"unknown")
+| eval index=coalesce(index,"*"), sourcetype=coalesce(sourcetype,"*"), host=coalesce(host,"*"), source=coalesce(source,"*")
+| eval evidence=case(category="internal_error",latest_error,category="cribl_health",latest_error,true(),coalesce(evidence,""))
+| eval updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
+| table finding_id severity category anomaly_type index sourcetype host source component log_level error_category quality_category cribl_category route pipeline destination finding actual_value baseline_value pct_change zscore recovered likely_cause recommended_action evidence owner status analyst comment first_seen last_seen updated_epoch updated
 | outputlookup ddhc_findings.csv
 
 # ============================================================
-# Daily Data Health Console - MLTK / Splunk AI Toolkit Additions
+# Daily Data Health Console - MLTK Splunk AI Toolkit Additions
 # These stanzas extend the base DDHC saved searches with DensityFunction models.
 # Run the training searches manually once before relying on score outputs.
 # DDHC 12 overwrites ddhc_findings.csv with deterministic + MLTK findings.
@@ -284,20 +284,20 @@ description = One-time or occasional helper search to generate ddhc_expected_dat
 cron_schedule = 0 3 * * 0
 dispatch.earliest_time = -30d
 dispatch.latest_time = now
-search = | tstats summariesonly=false earliest(_time) as first_seen_epoch latest(_time) as last_seen_epoch count as event_count_30d where index=* earliest=-30d latest=now by index sourcetype host \
-| where event_count_30d > 0 \
-| eval source="*" \
-| eval first_seen=strftime(first_seen_epoch,"%F %T") \
-| eval last_seen=strftime(last_seen_epoch,"%F %T") \
-| eval days_seen=round((last_seen_epoch-first_seen_epoch)/86400,2) \
-| eval avg_events_per_day=round(event_count_30d/30,0) \
-| eval expected_frequency_minutes=case(avg_events_per_day>=1000000,5,avg_events_per_day>=100000,10,avg_events_per_day>=10000,15,avg_events_per_day>=1000,30,avg_events_per_day>=100,60,true(),1440) \
-| eval criticality=case(match(lower(sourcetype),"wineventlog:security|security|edr|crowdstrike|carbonblack|sentinel|defender|pan:traffic|firewall|ids|ips|dns|proxy|vpn|authentication|linux_secure|syslog"),"critical",avg_events_per_day>=100000,"high",avg_events_per_day>=10000,"medium",true(),"low") \
-| eval owner=case(match(lower(index." ".sourcetype),"wineventlog|windows|powershell"),"Windows Team",match(lower(index." ".sourcetype),"linux|unix|syslog|secure"),"Linux Team",match(lower(index." ".sourcetype),"pan|firewall|proxy|dns|vpn|network|cisco|asa|fortinet|palo"),"Network Team",match(lower(index." ".sourcetype),"edr|crowdstrike|carbonblack|sentinel|defender"),"Security Team",true(),"unknown") \
-| eval environment=case(match(lower(host),"prod|prd"),"prod",match(lower(host),"dev"),"dev",match(lower(host),"test|tst|qa"),"test",true(),"unknown") \
-| eval notes="Auto-generated from last 30 days of observed host/index/sourcetype activity. source is wildcarded as * to avoid false positives from rotating source paths." \
-| table host index sourcetype source owner criticality environment expected_frequency_minutes notes first_seen last_seen event_count_30d avg_events_per_day days_seen \
-| sort index sourcetype host \
+search = | tstats summariesonly=false earliest(_time) as first_seen_epoch latest(_time) as last_seen_epoch count as event_count_30d where index=* earliest=-30d latest=now by index sourcetype host
+| where event_count_30d > 0
+| eval source="*"
+| eval first_seen=strftime(first_seen_epoch,"%F %T")
+| eval last_seen=strftime(last_seen_epoch,"%F %T")
+| eval days_seen=round((last_seen_epoch-first_seen_epoch)/86400,2)
+| eval avg_events_per_day=round(event_count_30d/30,0)
+| eval expected_frequency_minutes=case(avg_events_per_day>=1000000,5,avg_events_per_day>=100000,10,avg_events_per_day>=10000,15,avg_events_per_day>=1000,30,avg_events_per_day>=100,60,true(),1440)
+| eval criticality=case(match(lower(sourcetype),"wineventlog:security|security|edr|crowdstrike|carbonblack|sentinel|defender|pan:traffic|firewall|ids|ips|dns|proxy|vpn|authentication|linux_secure|syslog"),"critical",avg_events_per_day>=100000,"high",avg_events_per_day>=10000,"medium",true(),"low")
+| eval owner=case(match(lower(index." ".sourcetype),"wineventlog|windows|powershell"),"Windows Team",match(lower(index." ".sourcetype),"linux|unix|syslog|secure"),"Linux Team",match(lower(index." ".sourcetype),"pan|firewall|proxy|dns|vpn|network|cisco|asa|fortinet|palo"),"Network Team",match(lower(index." ".sourcetype),"edr|crowdstrike|carbonblack|sentinel|defender"),"Security Team",true(),"unknown")
+| eval environment=case(match(lower(host),"prod|prd"),"prod",match(lower(host),"dev"),"dev",match(lower(host),"test|tst|qa"),"test",true(),"unknown")
+| eval notes="Auto-generated from last 30 days of observed host/index/sourcetype activity. source is wildcarded as * to avoid false positives from rotating source paths."
+| table host index sourcetype source owner criticality environment expected_frequency_minutes notes first_seen last_seen event_count_30d avg_events_per_day days_seen
+| sort index sourcetype host
 | outputlookup ddhc_expected_data_sources.csv
 
 [DDHC ML 00 - Test MLTK DensityFunction]
@@ -306,10 +306,10 @@ description = Manual validation search. Run once to verify fit/apply is permitte
 cron_schedule = 0 0 1 1 *
 dispatch.earliest_time = -5m
 dispatch.latest_time = now
-search = | makeresults count=100 \
-| streamstats count as x \
-| eval value=if(x=100,999,random()%100) \
-| fit DensityFunction value into ddhc_test_density \
+search = | makeresults count=100
+| streamstats count as x
+| eval value=if(x=100,999,random()%100)
+| fit DensityFunction value into ddhc_test_density
 | outputlookup ddhc_mltk_test_fit.csv
 
 [DDHC ML 01 - Train Index Daily Density Model]
@@ -318,9 +318,9 @@ description = Trains MLTK DensityFunction model for daily index volume anomaly d
 cron_schedule = 0 2 * * *
 dispatch.earliest_time = -90d@d
 dispatch.latest_time = -1d@d
-search = | tstats summariesonly=false count as event_count where index=* earliest=-90d@d latest=-1d@d by _time index span=1d \
-| eval day_of_week=strftime(_time,"%A") \
-| where event_count>0 \
+search = | tstats summariesonly=false count as event_count where index=* earliest=-90d@d latest=-1d@d by _time index span=1d
+| eval day_of_week=strftime(_time,"%A")
+| where event_count>0
 | fit DensityFunction event_count by index day_of_week into ddhc_index_daily_density
 
 [DDHC ML 02 - Score Index Daily Density Anomalies]
@@ -329,28 +329,28 @@ description = Applies MLTK daily index volume model to yesterday and writes ddhc
 cron_schedule = 15 2 * * *
 dispatch.earliest_time = -1d@d
 dispatch.latest_time = @d
-search = | tstats summariesonly=false count as event_count where index=* earliest=-1d@d latest=@d by index \
-| eval _time=relative_time(now(),"-1d@d") \
-| eval day_of_week=strftime(_time,"%A") \
-| apply ddhc_index_daily_density \
-| rename event_count as yesterday_count \
-| eval is_outlier=coalesce(IsOutlier,event_count_isOutlier,isOutlier,is_outlier,'IsOutlier(event_count)',0) \
-| eval ml_score=coalesce(BoundaryRanges,ProbabilityDensity,probability_density,score,log_pdf,null()) \
-| where is_outlier=1 \
-| lookup ddhc_index_daily_baseline.csv index OUTPUT median_count avg_count stdev_count \
-| lookup ddhc_today_projection.csv index OUTPUT projected_today as projected_today_index \
-| eval median_count=coalesce(median_count,0) \
-| eval pct_change=if(median_count>0,round(((yesterday_count-median_count)/median_count)*100,2),null()) \
-| eval anomaly_type=case(yesterday_count<median_count,"drop",yesterday_count>median_count,"spike",true(),"outlier") \
-| eval recovered=case(anomaly_type="drop" AND projected_today_index>=median_count*0.75,1,anomaly_type="spike" AND projected_today_index<=median_count*1.5,1,true(),0) \
-| eval severity=case(anomaly_type="drop" AND pct_change<-75,"critical",anomaly_type="drop","high",anomaly_type="spike" AND pct_change>300,"high",true(),"medium") \
-| eval category="ml_index_volume", sourcetype="*", host="*", source="*", actual_value=yesterday_count, baseline_value=median_count, zscore=null() \
-| eval finding="MLTK detected index volume ".anomaly_type.": yesterday=".yesterday_count.", baseline_median=".median_count.", pct_change=".pct_change."%" \
-| eval likely_cause=case(recovered=1,"MLTK detected an outlier yesterday, but today appears recovered.",recovered=0,"MLTK detected an outlier and today's projection is still abnormal.",true(),"MLTK detected an index-level outlier.") \
-| eval recommended_action="Review sourcetype/host/source contributors and correlated _internal/Cribl evidence." \
-| eval first_seen=strftime(relative_time(now(),"-1d@d"),"%F %T"), last_seen=strftime(relative_time(now(),"@d"),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
-| eval finding_id=md5(category."|".index."|".anomaly_type."|".first_seen) \
-| table finding_id severity category anomaly_type index sourcetype host source finding actual_value baseline_value pct_change zscore ml_score recovered likely_cause recommended_action first_seen last_seen updated_epoch updated yesterday_count \
+search = | tstats summariesonly=false count as event_count where index=* earliest=-1d@d latest=@d by index
+| eval _time=relative_time(now(),"-1d@d")
+| eval day_of_week=strftime(_time,"%A")
+| apply ddhc_index_daily_density
+| rename event_count as yesterday_count
+| eval is_outlier=coalesce(IsOutlier,event_count_isOutlier,isOutlier,is_outlier,'IsOutlier(event_count)',0)
+| eval ml_score=coalesce(BoundaryRanges,ProbabilityDensity,probability_density,score,log_pdf,null())
+| where is_outlier=1
+| lookup ddhc_index_daily_baseline.csv index OUTPUT median_count avg_count stdev_count
+| lookup ddhc_today_projection.csv index OUTPUT projected_today as projected_today_index
+| eval median_count=coalesce(median_count,0)
+| eval pct_change=if(median_count>0,round(((yesterday_count-median_count)/median_count)*100,2),null())
+| eval anomaly_type=case(yesterday_count<median_count,"drop",yesterday_count>median_count,"spike",true(),"outlier")
+| eval recovered=case(anomaly_type="drop" AND projected_today_index>=median_count*0.75,1,anomaly_type="spike" AND projected_today_index<=median_count*1.5,1,true(),0)
+| eval severity=case(anomaly_type="drop" AND pct_change<-75,"critical",anomaly_type="drop","high",anomaly_type="spike" AND pct_change>300,"high",true(),"medium")
+| eval category="ml_index_volume", sourcetype="*", host="*", source="*", actual_value=yesterday_count, baseline_value=median_count, zscore=null()
+| eval finding="MLTK detected index volume ".anomaly_type.": yesterday=".yesterday_count.", baseline_median=".median_count.", pct_change=".pct_change."%"
+| eval likely_cause=case(recovered=1,"MLTK detected an outlier yesterday, but today appears recovered.",recovered=0,"MLTK detected an outlier and today's projection is still abnormal.",true(),"MLTK detected an index-level outlier.")
+| eval recommended_action="Review sourcetype/host/source contributors and correlated _internal/Cribl evidence."
+| eval first_seen=strftime(relative_time(now(),"-1d@d"),"%F %T"), last_seen=strftime(relative_time(now(),"@d"),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
+| eval finding_id=md5(category."|".index."|".anomaly_type."|".first_seen)
+| table finding_id severity category anomaly_type index sourcetype host source finding actual_value baseline_value pct_change zscore ml_score recovered likely_cause recommended_action first_seen last_seen updated_epoch updated yesterday_count
 | outputlookup ddhc_ml_index_anomalies.csv
 
 [DDHC ML 03 - Train Sourcetype Daily Density Model]
@@ -359,9 +359,9 @@ description = Trains MLTK DensityFunction model for daily index/sourcetype volum
 cron_schedule = 30 2 * * *
 dispatch.earliest_time = -90d@d
 dispatch.latest_time = -1d@d
-search = | tstats summariesonly=false count as event_count where index=* earliest=-90d@d latest=-1d@d by _time index sourcetype span=1d \
-| eval day_of_week=strftime(_time,"%A") \
-| where event_count>0 \
+search = | tstats summariesonly=false count as event_count where index=* earliest=-90d@d latest=-1d@d by _time index sourcetype span=1d
+| eval day_of_week=strftime(_time,"%A")
+| where event_count>0
 | fit DensityFunction event_count by index sourcetype day_of_week into ddhc_sourcetype_daily_density
 
 [DDHC ML 04 - Score Sourcetype Daily Density Anomalies]
@@ -370,28 +370,28 @@ description = Applies MLTK sourcetype volume model to yesterday and writes ddhc_
 cron_schedule = 45 2 * * *
 dispatch.earliest_time = -1d@d
 dispatch.latest_time = @d
-search = | tstats summariesonly=false count as event_count where index=* earliest=-1d@d latest=@d by index sourcetype \
-| eval _time=relative_time(now(),"-1d@d") \
-| eval day_of_week=strftime(_time,"%A") \
-| apply ddhc_sourcetype_daily_density \
-| rename event_count as yesterday_count \
-| eval is_outlier=coalesce(IsOutlier,event_count_isOutlier,isOutlier,is_outlier,'IsOutlier(event_count)',0) \
-| eval ml_score=coalesce(BoundaryRanges,ProbabilityDensity,probability_density,score,log_pdf,null()) \
-| where is_outlier=1 \
-| lookup ddhc_sourcetype_daily_baseline.csv index sourcetype OUTPUT median_count avg_count stdev_count \
-| lookup ddhc_today_projection.csv index sourcetype OUTPUT projected_today \
-| eval median_count=coalesce(median_count,0) \
-| eval pct_change=if(median_count>0,round(((yesterday_count-median_count)/median_count)*100,2),null()) \
-| eval anomaly_type=case(yesterday_count<median_count,"drop",yesterday_count>median_count,"spike",true(),"outlier") \
-| eval recovered=case(anomaly_type="drop" AND projected_today>=median_count*0.75,1,anomaly_type="spike" AND projected_today<=median_count*1.5,1,true(),0) \
-| eval severity=case(anomaly_type="drop" AND pct_change<-75,"critical",anomaly_type="drop","high",anomaly_type="spike" AND pct_change>300,"high",true(),"medium") \
-| eval category="ml_sourcetype_volume", host="*", source="*", actual_value=yesterday_count, baseline_value=median_count, zscore=null() \
-| eval finding="MLTK detected sourcetype volume ".anomaly_type.": yesterday=".yesterday_count.", baseline_median=".median_count.", pct_change=".pct_change."%" \
-| eval likely_cause=case(recovered=1,"MLTK detected an outlier yesterday, but today appears recovered.",recovered=0,"MLTK detected an outlier and today's projection is still abnormal.",true(),"MLTK detected a sourcetype-level outlier.") \
-| eval recommended_action="Review top hosts/sources and correlated _internal/Cribl evidence." \
-| eval first_seen=strftime(relative_time(now(),"-1d@d"),"%F %T"), last_seen=strftime(relative_time(now(),"@d"),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
-| eval finding_id=md5(category."|".index."|".sourcetype."|".anomaly_type."|".first_seen) \
-| table finding_id severity category anomaly_type index sourcetype host source finding actual_value baseline_value pct_change zscore ml_score recovered likely_cause recommended_action first_seen last_seen updated_epoch updated yesterday_count \
+search = | tstats summariesonly=false count as event_count where index=* earliest=-1d@d latest=@d by index sourcetype
+| eval _time=relative_time(now(),"-1d@d")
+| eval day_of_week=strftime(_time,"%A")
+| apply ddhc_sourcetype_daily_density
+| rename event_count as yesterday_count
+| eval is_outlier=coalesce(IsOutlier,event_count_isOutlier,isOutlier,is_outlier,'IsOutlier(event_count)',0)
+| eval ml_score=coalesce(BoundaryRanges,ProbabilityDensity,probability_density,score,log_pdf,null())
+| where is_outlier=1
+| lookup ddhc_sourcetype_daily_baseline.csv index sourcetype OUTPUT median_count avg_count stdev_count
+| lookup ddhc_today_projection.csv index sourcetype OUTPUT projected_today
+| eval median_count=coalesce(median_count,0)
+| eval pct_change=if(median_count>0,round(((yesterday_count-median_count)/median_count)*100,2),null())
+| eval anomaly_type=case(yesterday_count<median_count,"drop",yesterday_count>median_count,"spike",true(),"outlier")
+| eval recovered=case(anomaly_type="drop" AND projected_today>=median_count*0.75,1,anomaly_type="spike" AND projected_today<=median_count*1.5,1,true(),0)
+| eval severity=case(anomaly_type="drop" AND pct_change<-75,"critical",anomaly_type="drop","high",anomaly_type="spike" AND pct_change>300,"high",true(),"medium")
+| eval category="ml_sourcetype_volume", host="*", source="*", actual_value=yesterday_count, baseline_value=median_count, zscore=null()
+| eval finding="MLTK detected sourcetype volume ".anomaly_type.": yesterday=".yesterday_count.", baseline_median=".median_count.", pct_change=".pct_change."%"
+| eval likely_cause=case(recovered=1,"MLTK detected an outlier yesterday, but today appears recovered.",recovered=0,"MLTK detected an outlier and today's projection is still abnormal.",true(),"MLTK detected a sourcetype-level outlier.")
+| eval recommended_action="Review top hosts/sources and correlated _internal/Cribl evidence."
+| eval first_seen=strftime(relative_time(now(),"-1d@d"),"%F %T"), last_seen=strftime(relative_time(now(),"@d"),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
+| eval finding_id=md5(category."|".index."|".sourcetype."|".anomaly_type."|".first_seen)
+| table finding_id severity category anomaly_type index sourcetype host source finding actual_value baseline_value pct_change zscore ml_score recovered likely_cause recommended_action first_seen last_seen updated_epoch updated yesterday_count
 | outputlookup ddhc_ml_sourcetype_anomalies.csv
 
 [DDHC ML 05 - Train License Daily Density Model]
@@ -400,11 +400,11 @@ description = Trains MLTK DensityFunction model for daily license GB by index/so
 cron_schedule = 5 3 * * *
 dispatch.earliest_time = -90d@d
 dispatch.latest_time = -1d@d
-search = index=_internal source=*license_usage.log type=Usage earliest=-90d@d latest=-1d@d \
-| eval day=strftime(_time,"%F") \
-| stats sum(b) as bytes by day idx st \
-| eval gb=round(bytes/1024/1024/1024,4), _time=strptime(day,"%F"), index=idx, sourcetype=st, day_of_week=strftime(_time,"%A") \
-| where gb>0 \
+search = index=_internal source=*license_usage.log type=Usage earliest=-90d@d latest=-1d@d
+| eval day=strftime(_time,"%F")
+| stats sum(b) as bytes by day idx st
+| eval gb=round(bytes/1024/1024/1024,4), _time=strptime(day,"%F"), index=idx, sourcetype=st, day_of_week=strftime(_time,"%A")
+| where gb>0
 | fit DensityFunction gb by index sourcetype day_of_week into ddhc_license_daily_density
 
 [DDHC ML 06 - Score License Daily Density Anomalies]
@@ -413,24 +413,24 @@ description = Applies MLTK license volume model to yesterday and writes ddhc_ml_
 cron_schedule = 20 3 * * *
 dispatch.earliest_time = -1d@d
 dispatch.latest_time = @d
-search = index=_internal source=*license_usage.log type=Usage earliest=-1d@d latest=@d \
-| stats sum(b) as bytes by idx st \
-| eval gb=round(bytes/1024/1024/1024,4), index=idx, sourcetype=st, _time=relative_time(now(),"-1d@d"), day_of_week=strftime(_time,"%A") \
-| apply ddhc_license_daily_density \
-| eval is_outlier=coalesce(IsOutlier,gb_isOutlier,isOutlier,is_outlier,'IsOutlier(gb)',0) \
-| eval ml_score=coalesce(BoundaryRanges,ProbabilityDensity,probability_density,score,log_pdf,null()) \
-| where is_outlier=1 \
-| eventstats median(gb) as median_license_gb by index sourcetype \
-| eval baseline_value=median_license_gb, actual_value=gb, pct_change=if(baseline_value>0,round(((actual_value-baseline_value)/baseline_value)*100,2),null()) \
-| eval anomaly_type=case(actual_value<baseline_value,"drop",actual_value>baseline_value,"spike",true(),"outlier") \
-| eval severity=case(actual_value>100 AND pct_change>300,"critical",actual_value>50 AND pct_change>200,"high",actual_value>10,"medium",true(),"low") \
-| eval category="ml_license_volume", host="*", source="*", zscore=null(), recovered=0, yesterday_gb=actual_value \
-| eval finding="MLTK detected license usage ".anomaly_type.": yesterday_gb=".actual_value.", pct_change=".pct_change."%" \
-| eval likely_cause="Unusual license volume by index/sourcetype. Review top hosts/sources and recent data onboarding or replay." \
-| eval recommended_action="Review license usage contributors, recent onboarding, backlog replay, and high-volume hosts/sources." \
-| eval first_seen=strftime(relative_time(now(),"-1d@d"),"%F %T"), last_seen=strftime(relative_time(now(),"@d"),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
-| eval finding_id=md5(category."|".index."|".sourcetype."|".anomaly_type."|".first_seen) \
-| table finding_id severity category anomaly_type index sourcetype host source finding actual_value baseline_value pct_change zscore ml_score recovered likely_cause recommended_action first_seen last_seen updated_epoch updated yesterday_gb \
+search = index=_internal source=*license_usage.log type=Usage earliest=-1d@d latest=@d
+| stats sum(b) as bytes by idx st
+| eval gb=round(bytes/1024/1024/1024,4), index=idx, sourcetype=st, _time=relative_time(now(),"-1d@d"), day_of_week=strftime(_time,"%A")
+| apply ddhc_license_daily_density
+| eval is_outlier=coalesce(IsOutlier,gb_isOutlier,isOutlier,is_outlier,'IsOutlier(gb)',0)
+| eval ml_score=coalesce(BoundaryRanges,ProbabilityDensity,probability_density,score,log_pdf,null())
+| where is_outlier=1
+| eventstats median(gb) as median_license_gb by index sourcetype
+| eval baseline_value=median_license_gb, actual_value=gb, pct_change=if(baseline_value>0,round(((actual_value-baseline_value)/baseline_value)*100,2),null())
+| eval anomaly_type=case(actual_value<baseline_value,"drop",actual_value>baseline_value,"spike",true(),"outlier")
+| eval severity=case(actual_value>100 AND pct_change>300,"critical",actual_value>50 AND pct_change>200,"high",actual_value>10,"medium",true(),"low")
+| eval category="ml_license_volume", host="*", source="*", zscore=null(), recovered=0, yesterday_gb=actual_value
+| eval finding="MLTK detected license usage ".anomaly_type.": yesterday_gb=".actual_value.", pct_change=".pct_change."%"
+| eval likely_cause="Unusual license volume by index/sourcetype. Review top hosts/sources and recent data onboarding or replay."
+| eval recommended_action="Review license usage contributors, recent onboarding, backlog replay, and high-volume hosts/sources."
+| eval first_seen=strftime(relative_time(now(),"-1d@d"),"%F %T"), last_seen=strftime(relative_time(now(),"@d"),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
+| eval finding_id=md5(category."|".index."|".sourcetype."|".anomaly_type."|".first_seen)
+| table finding_id severity category anomaly_type index sourcetype host source finding actual_value baseline_value pct_change zscore ml_score recovered likely_cause recommended_action first_seen last_seen updated_epoch updated yesterday_gb
 | outputlookup ddhc_ml_license_anomalies.csv
 
 [DDHC ML 07 - Train Cribl Daily Density Model Optional]
@@ -439,12 +439,12 @@ description = Optional. Trains MLTK DensityFunction model for daily Cribl route/
 cron_schedule = 35 3 * * *
 dispatch.earliest_time = -90d@d
 dispatch.latest_time = -1d@d
-search = index=criblmetrics earliest=-90d@d latest=-1d@d \
-| eval route=coalesce(route,Route,cribl_route,"unknown"), pipeline=coalesce(pipeline,Pipeline,cribl_pipeline,"unknown"), destination=coalesce(dest,destination,output,cribl_dest,"unknown") \
-| eval day=strftime(_time,"%F") \
-| stats sum(bytes_in) as bytes_in sum(bytes_out) as bytes_out count as event_count by day host route pipeline destination \
-| eval bytes_out=coalesce(bytes_out,event_count), _time=strptime(day,"%F"), day_of_week=strftime(_time,"%A") \
-| where bytes_out>0 \
+search = index=criblmetrics earliest=-90d@d latest=-1d@d
+| eval route=coalesce(route,Route,cribl_route,"unknown"), pipeline=coalesce(pipeline,Pipeline,cribl_pipeline,"unknown"), destination=coalesce(dest,destination,output,cribl_dest,"unknown")
+| eval day=strftime(_time,"%F")
+| stats sum(bytes_in) as bytes_in sum(bytes_out) as bytes_out count as event_count by day host route pipeline destination
+| eval bytes_out=coalesce(bytes_out,event_count), _time=strptime(day,"%F"), day_of_week=strftime(_time,"%A")
+| where bytes_out>0
 | fit DensityFunction bytes_out by host route pipeline destination day_of_week into ddhc_cribl_daily_density
 
 [DDHC ML 08 - Score Cribl Daily Density Anomalies Optional]
@@ -453,25 +453,25 @@ description = Optional. Applies MLTK Cribl route/pipeline/destination volume mod
 cron_schedule = 50 3 * * *
 dispatch.earliest_time = -1d@d
 dispatch.latest_time = @d
-search = index=criblmetrics earliest=-1d@d latest=@d \
-| eval route=coalesce(route,Route,cribl_route,"unknown"), pipeline=coalesce(pipeline,Pipeline,cribl_pipeline,"unknown"), destination=coalesce(dest,destination,output,cribl_dest,"unknown") \
-| stats sum(bytes_in) as bytes_in sum(bytes_out) as bytes_out count as event_count by host route pipeline destination \
-| eval bytes_out=coalesce(bytes_out,event_count), _time=relative_time(now(),"-1d@d"), day_of_week=strftime(_time,"%A") \
-| apply ddhc_cribl_daily_density \
-| eval is_outlier=coalesce(IsOutlier,bytes_out_isOutlier,isOutlier,is_outlier,'IsOutlier(bytes_out)',0) \
-| eval ml_score=coalesce(BoundaryRanges,ProbabilityDensity,probability_density,score,log_pdf,null()) \
-| where is_outlier=1 \
-| eventstats median(bytes_out) as median_bytes_out by host route pipeline destination \
-| eval actual_value=bytes_out, baseline_value=median_bytes_out, pct_change=if(baseline_value>0,round(((actual_value-baseline_value)/baseline_value)*100,2),null()) \
-| eval anomaly_type=case(actual_value<baseline_value,"drop",actual_value>baseline_value,"spike",true(),"outlier") \
-| eval severity=case(anomaly_type="drop" AND pct_change<-80,"critical",anomaly_type="drop","high",anomaly_type="spike" AND pct_change>300,"high",true(),"medium") \
-| eval category="ml_cribl_health", index="*", sourcetype="*", source="*", zscore=null(), recovered=0 \
-| eval finding="MLTK detected Cribl route volume ".anomaly_type.": bytes_out=".actual_value.", pct_change=".pct_change."%" \
-| eval likely_cause="Cribl route/pipeline/destination volume is abnormal. Possible route change, pipeline issue, destination issue, replay, or upstream source change." \
-| eval recommended_action="Check Cribl worker/group health, route, pipeline, destination, TLS/network status, and related Splunk ingest findings." \
-| eval first_seen=strftime(relative_time(now(),"-1d@d"),"%F %T"), last_seen=strftime(relative_time(now(),"@d"),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
-| eval finding_id=md5(category."|".host."|".route."|".pipeline."|".destination."|".anomaly_type."|".first_seen) \
-| table finding_id severity category anomaly_type index sourcetype host source route pipeline destination finding actual_value baseline_value pct_change zscore ml_score recovered likely_cause recommended_action first_seen last_seen updated_epoch updated bytes_in bytes_out \
+search = index=criblmetrics earliest=-1d@d latest=@d
+| eval route=coalesce(route,Route,cribl_route,"unknown"), pipeline=coalesce(pipeline,Pipeline,cribl_pipeline,"unknown"), destination=coalesce(dest,destination,output,cribl_dest,"unknown")
+| stats sum(bytes_in) as bytes_in sum(bytes_out) as bytes_out count as event_count by host route pipeline destination
+| eval bytes_out=coalesce(bytes_out,event_count), _time=relative_time(now(),"-1d@d"), day_of_week=strftime(_time,"%A")
+| apply ddhc_cribl_daily_density
+| eval is_outlier=coalesce(IsOutlier,bytes_out_isOutlier,isOutlier,is_outlier,'IsOutlier(bytes_out)',0)
+| eval ml_score=coalesce(BoundaryRanges,ProbabilityDensity,probability_density,score,log_pdf,null())
+| where is_outlier=1
+| eventstats median(bytes_out) as median_bytes_out by host route pipeline destination
+| eval actual_value=bytes_out, baseline_value=median_bytes_out, pct_change=if(baseline_value>0,round(((actual_value-baseline_value)/baseline_value)*100,2),null())
+| eval anomaly_type=case(actual_value<baseline_value,"drop",actual_value>baseline_value,"spike",true(),"outlier")
+| eval severity=case(anomaly_type="drop" AND pct_change<-80,"critical",anomaly_type="drop","high",anomaly_type="spike" AND pct_change>300,"high",true(),"medium")
+| eval category="ml_cribl_health", index="*", sourcetype="*", source="*", zscore=null(), recovered=0
+| eval finding="MLTK detected Cribl route volume ".anomaly_type.": bytes_out=".actual_value.", pct_change=".pct_change."%"
+| eval likely_cause="Cribl route/pipeline/destination volume is abnormal. Possible route change, pipeline issue, destination issue, replay, or upstream source change."
+| eval recommended_action="Check Cribl worker/group health, route, pipeline, destination, TLS/network status, and related Splunk ingest findings."
+| eval first_seen=strftime(relative_time(now(),"-1d@d"),"%F %T"), last_seen=strftime(relative_time(now(),"@d"),"%F %T"), updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
+| eval finding_id=md5(category."|".host."|".route."|".pipeline."|".destination."|".anomaly_type."|".first_seen)
+| table finding_id severity category anomaly_type index sourcetype host source route pipeline destination finding actual_value baseline_value pct_change zscore ml_score recovered likely_cause recommended_action first_seen last_seen updated_epoch updated bytes_in bytes_out
 | outputlookup ddhc_ml_cribl_anomalies.csv
 
 [DDHC 12 - Build Normalized Findings With MLTK]
@@ -480,26 +480,26 @@ description = Combines deterministic and MLTK DDHC lookup outputs into ddhc_find
 cron_schedule = 5-59/15 * * * *
 dispatch.earliest_time = -15m
 dispatch.latest_time = now
-search = | inputlookup ddhc_index_anomalies.csv \
-| append [ | inputlookup ddhc_sourcetype_anomalies.csv ] \
-| append [ | inputlookup ddhc_ml_index_anomalies.csv ] \
-| append [ | inputlookup ddhc_ml_sourcetype_anomalies.csv ] \
-| append [ | inputlookup ddhc_ml_license_anomalies.csv ] \
-| append [ | inputlookup ddhc_missing_expected_sources.csv ] \
-| append [ | inputlookup ddhc_new_data.csv ] \
-| append [ | inputlookup ddhc_internal_error_summary.csv ] \
-| append [ | inputlookup ddhc_data_quality.csv ] \
-| append [ | inputlookup ddhc_cribl_health_summary.csv ] \
-| append [ | inputlookup ddhc_ml_cribl_anomalies.csv ] \
-| eval finding_id=coalesce(finding_id,md5(category."|".index."|".sourcetype."|".host."|".source."|".finding)) \
-| eval owner=coalesce(owner,"unknown"), status="new" \
-| lookup ddhc_finding_status.csv finding_id OUTPUT status as analyst_status analyst comment last_updated \
-| eval status=coalesce(analyst_status,status) \
-| eval severity=lower(coalesce(severity,"informational")), category=coalesce(category,"uncategorized"), anomaly_type=coalesce(anomaly_type,"unknown") \
-| eval index=coalesce(index,"*"), sourcetype=coalesce(sourcetype,"*"), host=coalesce(host,"*"), source=coalesce(source,"*") \
-| eval evidence=case(category="internal_error",latest_error,category="cribl_health",latest_error,true(),coalesce(evidence,"")) \
-| eval updated_epoch=now(), updated=strftime(updated_epoch,"%F %T") \
-| table finding_id severity category anomaly_type index sourcetype host source component log_level error_category quality_category cribl_category route pipeline destination finding actual_value baseline_value pct_change zscore ml_score recovered likely_cause recommended_action evidence owner status analyst comment first_seen last_seen updated_epoch updated \
+search = | inputlookup ddhc_index_anomalies.csv
+| append [ | inputlookup ddhc_sourcetype_anomalies.csv ]
+| append [ | inputlookup ddhc_ml_index_anomalies.csv ]
+| append [ | inputlookup ddhc_ml_sourcetype_anomalies.csv ]
+| append [ | inputlookup ddhc_ml_license_anomalies.csv ]
+| append [ | inputlookup ddhc_missing_expected_sources.csv ]
+| append [ | inputlookup ddhc_new_data.csv ]
+| append [ | inputlookup ddhc_internal_error_summary.csv ]
+| append [ | inputlookup ddhc_data_quality.csv ]
+| append [ | inputlookup ddhc_cribl_health_summary.csv ]
+| append [ | inputlookup ddhc_ml_cribl_anomalies.csv ]
+| eval finding_id=coalesce(finding_id,md5(category."|".index."|".sourcetype."|".host."|".source."|".finding))
+| eval owner=coalesce(owner,"unknown"), status="new"
+| lookup ddhc_finding_status.csv finding_id OUTPUT status as analyst_status analyst comment last_updated
+| eval status=coalesce(analyst_status,status)
+| eval severity=lower(coalesce(severity,"informational")), category=coalesce(category,"uncategorized"), anomaly_type=coalesce(anomaly_type,"unknown")
+| eval index=coalesce(index,"*"), sourcetype=coalesce(sourcetype,"*"), host=coalesce(host,"*"), source=coalesce(source,"*")
+| eval evidence=case(category="internal_error",latest_error,category="cribl_health",latest_error,true(),coalesce(evidence,""))
+| eval updated_epoch=now(), updated=strftime(updated_epoch,"%F %T")
+| table finding_id severity category anomaly_type index sourcetype host source component log_level error_category quality_category cribl_category route pipeline destination finding actual_value baseline_value pct_change zscore ml_score recovered likely_cause recommended_action evidence owner status analyst comment first_seen last_seen updated_epoch updated
 | outputlookup ddhc_findings.csv
 
 
@@ -700,9 +700,9 @@ search = | inputlookup ddhc_index_anomalies.csv \
 | search status!="resolved" status!="false_positive"
 | eval severity_rank=case(severity="critical",1,severity="high",2,severity="medium",3,severity="low",4,true(),5)
 | eval object=case(
-    isnotnull(source) AND source!="*" AND source!="", index." / ".sourcetype." / ".host." / ".source,
-    isnotnull(host) AND host!="*" AND host!="", index." / ".sourcetype." / ".host,
-    isnotnull(sourcetype) AND sourcetype!="*" AND sourcetype!="", index." / ".sourcetype,
+    isnotnull(source) AND source!="*" AND source!="", index." ".sourcetype." ".host." ".source,
+    isnotnull(host) AND host!="*" AND host!="", index." ".sourcetype." ".host,
+    isnotnull(sourcetype) AND sourcetype!="*" AND sourcetype!="", index." ".sourcetype,
     isnotnull(index) AND index!="", index,
     true(), coalesce(component,category)
 )
@@ -1132,7 +1132,7 @@ index=_internal source=*license_usage.log type=Usage earliest=-31d@d latest=@d
 
   <row>
     <panel>
-      <title>Lookup / Automation Freshness</title>
+      <title>Lookup Automation Freshness</title>
       <table>
         <search>
           <query><![CDATA[
@@ -1164,6 +1164,3 @@ index=_internal source=*license_usage.log type=Usage earliest=-31d@d latest=@d
     </panel>
   </row>
 </form>
-
-
-

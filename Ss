@@ -1,0 +1,69 @@
+SPLUNK_HOME="/opt/splunk"
+HOST="your-receiver-or-lb-fqdn"
+PORT="11102"
+CA_BUNDLE="/opt/splunk/etc/apps/YOUR_APP/certs/ca_chain.pem"
+
+echo "===== Effective Splunk TLS config ====="
+sudo -u splunk "$SPLUNK_HOME/bin/splunk" btool outputs list --debug | egrep -i \
+'tcpout|server =|clientCert|sslRootCAPath|sslVerifyServerCert|sslVerifyServerName|sslCommonNameToCheck|sslAltNameToCheck|tlsHostname'
+
+echo
+sudo -u splunk "$SPLUNK_HOME/bin/splunk" btool server list sslConfig --debug | egrep -i \
+'sslRootCAPath|serverCert|sslPassword|sslVersions|cipherSuite|ecdhCurves'
+
+echo
+echo "===== Pull live presented chain WITH SNI ====="
+sudo -u splunk "$SPLUNK_HOME/bin/splunk" cmd openssl s_client \
+  -connect "${HOST}:${PORT}" \
+  -servername "${HOST}" \
+  -showcerts \
+  -verify_return_error \
+  -CAfile "$CA_BUNDLE" \
+  </dev/null > /tmp/live_chain_sni.txt 2>&1
+
+grep -Ei 'Verify return code|verify error|subject=|issuer=' /tmp/live_chain_sni.txt
+
+awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/{print}' /tmp/live_chain_sni.txt > /tmp/live_chain_sni.pem
+rm -f /tmp/live_cert_*.pem
+
+awk '
+  /BEGIN CERTIFICATE/ {n++}
+  n {print > sprintf("/tmp/live_cert_%02d.pem", n)}
+  /END CERTIFICATE/ {close(sprintf("/tmp/live_cert_%02d.pem", n))}
+' /tmp/live_chain_sni.pem
+
+echo
+echo "===== Live presented certs ====="
+for cert in /tmp/live_cert_*.pem; do
+  echo
+  echo "----- $cert -----"
+  "$SPLUNK_HOME/bin/splunk" cmd openssl x509 -in "$cert" -noout \
+    -subject -issuer -serial -fingerprint -sha256
+  "$SPLUNK_HOME/bin/splunk" cmd openssl x509 -in "$cert" -noout -text | egrep -A4 \
+    'Subject:|Issuer:|Basic Constraints|Extended Key Usage|Subject Alternative Name'
+done
+
+echo
+echo "===== CA bundle certs ====="
+rm -f /tmp/ca_part_*.pem
+
+awk '
+  /BEGIN CERTIFICATE/ {n++}
+  n {print > sprintf("/tmp/ca_part_%02d.pem", n)}
+  /END CERTIFICATE/ {close(sprintf("/tmp/ca_part_%02d.pem", n))}
+' "$CA_BUNDLE"
+
+for cert in /tmp/ca_part_*.pem; do
+  echo
+  echo "----- $cert -----"
+  "$SPLUNK_HOME/bin/splunk" cmd openssl x509 -in "$cert" -noout \
+    -subject -issuer -serial -fingerprint -sha256
+  "$SPLUNK_HOME/bin/splunk" cmd openssl x509 -in "$cert" -noout -text | egrep -A3 \
+    'Basic Constraints|Subject Key Identifier|Authority Key Identifier'
+done
+
+echo
+echo "===== Recent Splunk TLS errors ====="
+sudo -u splunk grep -Ei \
+'same common name|X509Verify|TcpOutputFd|TcpInputProc|SSLCommon|certificate verify|ssl.*fail|unknown ca|alert' \
+"$SPLUNK_HOME/var/log/splunk/splunkd.log" | tail -80

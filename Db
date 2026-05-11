@@ -1,0 +1,28 @@
+SELECT
+    af.event_time AS event_time,
+    af.sequence_number,
+    af.action_id,
+    aa.name AS action_name,
+    af.succeeded,
+    af.session_id,
+    af.server_principal_name,
+    af.database_name,
+    af.schema_name,
+    af.object_name,
+    af.statement,
+    af.additional_information,
+    af.file_name,
+    af.audit_file_offset,
+    ct.class_type_desc,
+    af.class_type,
+    af.client_ip,
+    af.application_name,
+    af.host_name
+FROM sys.fn_get_audit_file('I:\\2022\\MSSQL2K22\\SQLAudit\\*', default, default) af
+LEFT JOIN sys.dm_audit_class_type_map ct
+    ON af.class_type = ct.class_type
+LEFT JOIN sys.dm_audit_actions aa
+    ON af.action_id = aa.action_id
+    AND aa.class_desc = ct.securable_class_desc
+WHERE af.event_time > ?
+ORDER BY af.event_time ASC

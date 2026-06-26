@@ -1,0 +1,20 @@
+[mscs:nsg:flow]
+SHOULD_LINEMERGE = false
+LINE_BREAKER = \}(\s*,\s*)(?=\{"time"\s*:)
+SEDCMD-remove_header = s/^\s*\{\s*"records"\s*:\s*\[\s*//g
+SEDCMD-remove_footer = s/\s*\]\s*\}\s*$//g
+TRUNCATE = 0
+
+TIME_PREFIX = \"time\"\s*:\s*\"
+MAX_TIMESTAMP_LOOKAHEAD = 40
+
+KV_MODE = json
+REPORT-tuples = extract_vnet_tuple
+
+
+
+[extract_vnet_tuple]
+SOURCE_KEY = flowRecords.flows{}.flowGroups{}.flowTuples{}
+DELIMS = ","
+FIELDS = flow_epoch_ms,src_ip,dst_ip,src_port,dst_port,protocol,flow_direction,flow_state,flow_encryption,packets_sent,bytes_sent,packets_received,bytes_received
+MV_ADD = true

@@ -1,0 +1,29 @@
+(index=summary OR index=_cmc_summary) source="splunk-svc-consumer" svc_usage=* earliest=-7d@h latest=now
+| search svc_consumer="search"
+| search host="*idx*"
+
+| fillnull value="" svc_consumer process_type search_provenances search_type search_app search_label search_user unified_sid search_modes labels search_head_names usage_source
+
+| eval app=if(search_app="", "unknown/no_app", search_app)
+| eval search_name=if(search_label="", "unknown/no_label", search_label)
+| eval user=if(search_user="", "unknown/no_user", search_user)
+| eval unified_sid=if(unified_sid="", usage_source, unified_sid)
+
+| stats max(svc_usage) as utilized_svc
+    by _time host app search_name user search_type search_head_names unified_sid process_type
+
+| bin _time span=1h
+
+| stats sum(utilized_svc) as estimated_svc
+    by _time host app
+
+| eventstats sum(estimated_svc) as indexer_hour_total_svc
+    by _time host
+
+| eval estimated_svc=round(estimated_svc,4)
+| eval indexer_hour_total_svc=round(indexer_hour_total_svc,4)
+| eval pct_of_indexer_hour=round((estimated_svc/indexer_hour_total_svc)*100,2)
+
+| rename host as indexer
+| table _time indexer app estimated_svc pct_of_indexer_hour indexer_hour_total_svc
+| sort 0 _time indexer -estimated_svc

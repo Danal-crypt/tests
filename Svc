@@ -1,10 +1,14 @@
 (index=summary OR index=_cmc_summary) source="splunk-svc-consumer" svc_usage=* earliest=-7d@h latest=now
 | search svc_consumer="search"
-| search host="*idx*"
 
-| fillnull value="" svc_consumer process_type search_provenances search_type search_app search_label search_user unified_sid search_modes labels search_head_names usage_source
+| fillnull value="" search_app search_label search_user unified_sid search_type search_head_names process_type usage_source
 
-| eval app=if(search_app="", "unknown/no_app", search_app)
+| eval app=case(
+    isnotnull(search_app) AND search_app!="", search_app,
+    isnotnull(app) AND app!="", app,
+    true(), "unknown/no_app"
+)
+
 | eval search_name=if(search_label="", "unknown/no_label", search_label)
 | eval user=if(search_user="", "unknown/no_user", search_user)
 | eval unified_sid=if(unified_sid="", usage_source, unified_sid)
@@ -17,13 +21,36 @@
 | stats sum(utilized_svc) as estimated_svc
     by _time host app
 
-| eventstats sum(estimated_svc) as indexer_hour_total_svc
+| eval app_group=case(
+    app=="Qmulos_TA_CIM", "Qmulos_TA_CIM",
+    app=="Q-Compliance", "Q_Compliance",
+    true(), "All_Other_Apps"
+)
+
+| stats
+    sum(eval(if(app_group=="Qmulos_TA_CIM", estimated_svc, 0))) as Qmulos_TA_CIM_svc
+    sum(eval(if(app_group=="Q_Compliance", estimated_svc, 0))) as Q_Compliance_svc
+    sum(eval(if(app_group=="All_Other_Apps", estimated_svc, 0))) as All_Other_Apps_svc
+    sum(estimated_svc) as indexer_hour_total_svc
     by _time host
 
-| eval estimated_svc=round(estimated_svc,4)
-| eval indexer_hour_total_svc=round(indexer_hour_total_svc,4)
-| eval pct_of_indexer_hour=round((estimated_svc/indexer_hour_total_svc)*100,2)
+| eval Qmulos_Combined_svc=Qmulos_TA_CIM_svc+Q_Compliance_svc
+
+| eval Qmulos_TA_CIM_pct_of_hour=if(indexer_hour_total_svc>0, round((Qmulos_TA_CIM_svc/indexer_hour_total_svc)*100,2),0)
+| eval Q_Compliance_pct_of_hour=if(indexer_hour_total_svc>0, round((Q_Compliance_svc/indexer_hour_total_svc)*100,2),0)
+| eval Qmulos_Combined_pct_of_hour=if(indexer_hour_total_svc>0, round((Qmulos_Combined_svc/indexer_hour_total_svc)*100,2),0)
+| eval All_Other_Apps_pct_of_hour=if(indexer_hour_total_svc>0, round((All_Other_Apps_svc/indexer_hour_total_svc)*100,2),0)
+
+| foreach Qmulos_TA_CIM_svc Q_Compliance_svc Qmulos_Combined_svc All_Other_Apps_svc indexer_hour_total_svc 
+    [ eval <<FIELD>>=round(<<FIELD>>,4) ]
 
 | rename host as indexer
-| table _time indexer app estimated_svc pct_of_indexer_hour indexer_hour_total_svc
-| sort 0 _time indexer -estimated_svc
+
+| table _time indexer 
+    Qmulos_TA_CIM_svc Qmulos_TA_CIM_pct_of_hour
+    Q_Compliance_svc Q_Compliance_pct_of_hour
+    Qmulos_Combined_svc Qmulos_Combined_pct_of_hour
+    All_Other_Apps_svc All_Other_Apps_pct_of_hour
+    indexer_hour_total_svc
+
+| sort 0 _time indexer

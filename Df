@@ -1,0 +1,585 @@
+#!/usr/bin/env bash
+# efos_maximo_sftp_script.sh
+#
+# Pull EfOS / Maximo logs over SFTP into a Splunk-friendly monitor tree.
+#
+# Splunk should monitor ONLY:
+#   /app/cribl/efos_logs_maximo/data
+#
+# Do NOT monitor:
+#   /app/cribl/efos_logs_maximo/.state
+#   /app/cribl/efos_logs_maximo/.tmp
+#
+# This script:
+#   - Uses checkpoints
+#   - Downloads each historical/rotated file only once
+#   - Appends only new bytes from growing logs
+#   - Handles truncation/rotation by creating a new local generation file
+#   - Uses SFTP only; no remote shell commands
+
+set -u
+set -o pipefail
+umask 022
+
+BASE_ROOT="/app/cribl/efos_logs_maximo"
+DATA_ROOT="$BASE_ROOT/data"
+STATE_DIR="$BASE_ROOT/.state"
+TMP_ROOT="$BASE_ROOT/.tmp"
+STATE_FILE="$STATE_DIR/checkpoints.tsv"
+LOCK_FILE="$STATE_DIR/pull.lock"
+RUN_LOG="$STATE_DIR/pull.log"
+SECRETS_FILE="$BASE_ROOT/.secrets"
+
+SFTP_BIN="${SFTP_BIN:-sftp}"
+SSHPASS_BIN="${SSHPASS_BIN:-sshpass}"
+STRICT_HOST_KEY_CHECKING="${STRICT_HOST_KEY_CHECKING:-accept-new}"
+
+# First-run behavior:
+#   SEED_ONLY=0  -> download existing matching logs on first sight
+#   SEED_ONLY=1  -> checkpoint current remote sizes without downloading history
+SEED_ONLY="${SEED_ONLY:-0}"
+
+# Format:
+# tag|host|port|user|password_env_var|comma,separated,remote,dirs
+HOST_CONFIGS=(
+  "srv1|100.108.6.245|37422|c_fdic_splunk|EFOS_PASS_SRV1|/shared_logs/PUI.CRON01,/shared_logs/PUI.MFI01,/shared_logs/PUI.RPT01,/shared_logs/PUI.UI01"
+  "srv2|100.108.6.246|37422|c_fdic_splunk|EFOS_PASS_SRV2|/shared_logs/SUI1.CRON01,/shared_logs/SUI1.MFI01,/shared_logs/SUI1.RPT01,/shared_logs/SUI1.UI01"
+  "test|100.108.6.228|37422|c_fdic_splunk|EFOS_PASS_TEST|/shared_logs/MXServer01"
+  "de|100.108.6.213|37422|c_fdic_splunk|EFOS_PASS_DE|/shared_logs/MXServer01"
+)
+
+mkdir -p "$DATA_ROOT" "$STATE_DIR" "$TMP_ROOT"
+touch "$STATE_FILE" "$RUN_LOG"
+
+chmod 0750 "$BASE_ROOT" "$STATE_DIR" "$TMP_ROOT" 2>/dev/null || true
+chmod 0640 "$STATE_FILE" "$RUN_LOG" 2>/dev/null || true
+
+if [[ -f "$SECRETS_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$SECRETS_FILE"
+fi
+
+log() {
+  printf '%s [%s] %s\n' "$(date -Is)" "$$" "$*" | tee -a "$RUN_LOG" >&2
+}
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || {
+    log "ERROR: missing required command: $1"
+    exit 1
+  }
+}
+
+need_cmd "$SSHPASS_BIN"
+need_cmd "$SFTP_BIN"
+need_cmd awk
+need_cmd find
+need_cmd flock
+need_cmd mktemp
+need_cmd sed
+need_cmd sort
+need_cmd stat
+need_cmd tail
+need_cmd truncate
+
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  log "Another pull is already running; exiting."
+  exit 0
+fi
+
+safe_name() {
+  printf '%s' "$1" | tr -c 'A-Za-z0-9._=-' '_'
+}
+
+log_type_for_file() {
+  local base="$1"
+
+  if [[ "$base" == SystemOut* ]]; then
+    printf 'SystemOut'
+  elif [[ "$base" == SystemErr* ]]; then
+    printf 'SystemErr'
+  else
+    printf 'unknown'
+  fi
+}
+
+make_dest_path() {
+  local tag="$1"
+  local host="$2"
+  local remote_dir="$3"
+  local remote_file="$4"
+  local generation="$5"
+
+  local app_dir
+  local base
+  local base_safe
+  local stem
+  local log_type
+  local dest_dir
+
+  app_dir="$(safe_name "$(basename "$remote_dir")")"
+  base="$(basename "$remote_file")"
+  base_safe="$(safe_name "$base")"
+  stem="${base_safe%.log}"
+  log_type="$(log_type_for_file "$base")"
+
+  dest_dir="$DATA_ROOT/remote_host=$tag/remote_ip=$host/app_dir=$app_dir/log_type=$log_type"
+  mkdir -p "$dest_dir"
+
+  printf '%s/%s.gen-%s.log' "$dest_dir" "$stem" "$generation"
+}
+
+sftp_path() {
+  # Your current paths do not contain spaces, but this keeps the script safer.
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/ /\\ /g'
+}
+
+sftp_run() {
+  local host="$1"
+  local port="$2"
+  local user="$3"
+  local pass="$4"
+  local batch_file="$5"
+  local stdout_file="$6"
+  local stderr_file="$7"
+
+  SSHPASS="$pass" "$SSHPASS_BIN" -e "$SFTP_BIN" \
+    -oPort="$port" \
+    -oBatchMode=no \
+    -oPreferredAuthentications=password,keyboard-interactive,publickey \
+    -oStrictHostKeyChecking="$STRICT_HOST_KEY_CHECKING" \
+    -oUserKnownHostsFile="$STATE_DIR/known_hosts" \
+    -oConnectTimeout=20 \
+    -oServerAliveInterval=15 \
+    -oServerAliveCountMax=2 \
+    "$user@$host" < "$batch_file" > "$stdout_file" 2> "$stderr_file"
+}
+
+log_sftp_output() {
+  local out_file="$1"
+  local err_file="$2"
+
+  if [[ -s "$out_file" ]]; then
+    log "SFTP stdout follows:"
+    sed 's/^/  /' "$out_file" | tail -80 | tee -a "$RUN_LOG" >&2
+  fi
+
+  if [[ -s "$err_file" ]]; then
+    log "SFTP stderr follows:"
+    sed 's/^/  /' "$err_file" | tail -80 | tee -a "$RUN_LOG" >&2
+  fi
+}
+
+list_remote_files() {
+  local host="$1"
+  local port="$2"
+  local user="$3"
+  local pass="$4"
+  local remote_dir="$5"
+
+  local batch
+  local out
+  local err
+  local rc
+  local edir
+
+  batch="$(mktemp "$TMP_ROOT/sftp-list-batch.XXXXXX")"
+  out="$(mktemp "$TMP_ROOT/sftp-list-out.XXXXXX")"
+  err="$(mktemp "$TMP_ROOT/sftp-list-err.XXXXXX")"
+  edir="$(sftp_path "$remote_dir")"
+
+  {
+    printf 'cd %s\n' "$edir"
+    printf 'ls -l\n'
+    printf 'bye\n'
+  } > "$batch"
+
+  sftp_run "$host" "$port" "$user" "$pass" "$batch" "$out" "$err"
+  rc=$?
+
+  if (( rc != 0 )); then
+    log_sftp_output "$out" "$err"
+    rm -f "$batch" "$out" "$err"
+    return "$rc"
+  fi
+
+  # Filter locally instead of asking remote SFTP to expand globs.
+  # Expected lines look like:
+  # -rw-r--r-- 1 user group 12345 Jul 1 06:10 SystemOut.log
+  awk -v dir="$remote_dir" '
+    $1 ~ /^-/ {
+      size=$5
+      name=$NF
+
+      if (size ~ /^[0-9]+$/ && name ~ /^System(Out|Err).*\.log$/) {
+        print dir "/" name "\t" size "\t" $0
+      }
+    }
+  ' "$out"
+
+  rm -f "$batch" "$out" "$err"
+  return 0
+}
+
+sftp_get_full() {
+  local host="$1"
+  local port="$2"
+  local user="$3"
+  local pass="$4"
+  local remote_file="$5"
+  local dest_file="$6"
+
+  local batch
+  local out
+  local err
+  local tmp
+  local rfile
+  local dfile
+  local bytes
+  local rc
+
+  batch="$(mktemp "$TMP_ROOT/sftp-get-batch.XXXXXX")"
+  out="$(mktemp "$TMP_ROOT/sftp-get-out.XXXXXX")"
+  err="$(mktemp "$TMP_ROOT/sftp-get-err.XXXXXX")"
+  tmp="$(mktemp "$TMP_ROOT/full.XXXXXX")"
+  rm -f "$tmp"
+
+  rfile="$(sftp_path "$remote_file")"
+  dfile="$(sftp_path "$tmp")"
+
+  {
+    printf 'get %s %s\n' "$rfile" "$dfile"
+    printf 'bye\n'
+  } > "$batch"
+
+  sftp_run "$host" "$port" "$user" "$pass" "$batch" "$out" "$err"
+  rc=$?
+
+  if (( rc != 0 )); then
+    log_sftp_output "$out" "$err"
+    rm -f "$batch" "$out" "$err" "$tmp"
+    return "$rc"
+  fi
+
+  bytes="$(stat -c '%s' "$tmp" 2>/dev/null || printf '0')"
+
+  mkdir -p "$(dirname "$dest_file")"
+  mv -f "$tmp" "$dest_file"
+  chmod 0644 "$dest_file"
+
+  rm -f "$batch" "$out" "$err"
+  printf '%s' "$bytes"
+  return 0
+}
+
+sftp_reget_from_offset_append() {
+  local host="$1"
+  local port="$2"
+  local user="$3"
+  local pass="$4"
+  local remote_file="$5"
+  local offset="$6"
+  local dest_file="$7"
+
+  local batch
+  local out
+  local err
+  local tmp
+  local rfile
+  local tfile
+  local rc
+  local new_size
+  local start
+
+  batch="$(mktemp "$TMP_ROOT/sftp-reget-batch.XXXXXX")"
+  out="$(mktemp "$TMP_ROOT/sftp-reget-out.XXXXXX")"
+  err="$(mktemp "$TMP_ROOT/sftp-reget-err.XXXXXX")"
+  tmp="$(mktemp "$TMP_ROOT/reget-offset.XXXXXX")"
+
+  # Make a sparse temp file with logical size equal to the checkpoint.
+  # sftp reget resumes from that size, so only new remote bytes transfer.
+  : > "$tmp"
+  truncate -s "$offset" "$tmp"
+
+  rfile="$(sftp_path "$remote_file")"
+  tfile="$(sftp_path "$tmp")"
+
+  {
+    printf 'reget %s %s\n' "$rfile" "$tfile"
+    printf 'bye\n'
+  } > "$batch"
+
+  sftp_run "$host" "$port" "$user" "$pass" "$batch" "$out" "$err"
+  rc=$?
+
+  if (( rc != 0 )); then
+    log_sftp_output "$out" "$err"
+    rm -f "$batch" "$out" "$err" "$tmp"
+    return "$rc"
+  fi
+
+  new_size="$(stat -c '%s' "$tmp")"
+
+  if (( new_size > offset )); then
+    start=$((offset + 1))
+    mkdir -p "$(dirname "$dest_file")"
+    touch "$dest_file"
+    tail -c +"$start" "$tmp" >> "$dest_file"
+    chmod 0644 "$dest_file"
+  fi
+
+  rm -f "$batch" "$out" "$err" "$tmp"
+  printf '%s' "$new_size"
+  return 0
+}
+
+declare -A CP_OFFSET
+declare -A CP_LISTING
+declare -A CP_DEST
+declare -A CP_GEN
+declare -A CP_LAST_SEEN
+
+load_state() {
+  local key
+  local offset
+  local listing
+  local dest
+  local gen
+  local last_seen
+
+  while IFS=$'\t' read -r key offset listing dest gen last_seen || [[ -n "${key:-}" ]]; do
+    [[ -z "${key:-}" || "$key" == \#* ]] && continue
+
+    CP_OFFSET["$key"]="${offset:-0}"
+    CP_LISTING["$key"]="${listing:-}"
+    CP_DEST["$key"]="${dest:-}"
+    CP_GEN["$key"]="${gen:-}"
+    CP_LAST_SEEN["$key"]="${last_seen:-}"
+  done < "$STATE_FILE"
+}
+
+save_state() {
+  local tmp
+  local key
+
+  tmp="$(mktemp "$STATE_DIR/checkpoints.XXXXXX")"
+
+  for key in "${!CP_OFFSET[@]}"; do
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$key" \
+      "${CP_OFFSET[$key]:-0}" \
+      "${CP_LISTING[$key]:-}" \
+      "${CP_DEST[$key]:-}" \
+      "${CP_GEN[$key]:-}" \
+      "${CP_LAST_SEEN[$key]:-}" \
+      >> "$tmp"
+  done
+
+  sort -o "$tmp" "$tmp"
+  mv -f "$tmp" "$STATE_FILE"
+  chmod 0640 "$STATE_FILE" 2>/dev/null || true
+}
+
+process_remote_file() {
+  local tag="$1"
+  local host="$2"
+  local port="$3"
+  local user="$4"
+  local pass="$5"
+  local remote_dir="$6"
+  local remote_file="$7"
+  local remote_size="$8"
+  local listing="$9"
+
+  local key
+  local now
+  local generation
+  local dest
+  local old_offset
+  local old_dest
+  local old_gen
+  local local_size
+  local bytes
+  local new_size
+
+  now="$(date -u +%Y%m%dT%H%M%SZ)"
+  key="$tag|$host|$port|$remote_file"
+
+  old_offset="${CP_OFFSET[$key]:-}"
+  old_dest="${CP_DEST[$key]:-}"
+  old_gen="${CP_GEN[$key]:-}"
+
+  if [[ -n "$old_offset" && ! "$old_offset" =~ ^[0-9]+$ ]]; then
+    log "WARN checkpoint offset was invalid for $key: $old_offset. Resetting to 0."
+    old_offset="0"
+  fi
+
+  # New file never seen before.
+  if [[ -z "$old_offset" || -z "$old_dest" ]]; then
+    generation="$now"
+    dest="$(make_dest_path "$tag" "$host" "$remote_dir" "$remote_file" "$generation")"
+
+    if [[ "$SEED_ONLY" == "1" ]]; then
+      log "SEED $tag $remote_file size=$remote_size; checkpointing without download"
+
+      CP_OFFSET["$key"]="$remote_size"
+      CP_LISTING["$key"]="$listing"
+      CP_DEST["$key"]="$dest"
+      CP_GEN["$key"]="$generation"
+      CP_LAST_SEEN["$key"]="$now"
+
+      save_state
+      return 0
+    fi
+
+    log "FULL $tag $remote_file -> $dest"
+
+    if bytes="$(sftp_get_full "$host" "$port" "$user" "$pass" "$remote_file" "$dest")"; then
+      CP_OFFSET["$key"]="$bytes"
+      CP_LISTING["$key"]="$listing"
+      CP_DEST["$key"]="$dest"
+      CP_GEN["$key"]="$generation"
+      CP_LAST_SEEN["$key"]="$now"
+
+      save_state
+      log "OK full $tag $(basename "$remote_file") bytes=$bytes"
+      return 0
+    fi
+
+    log "ERROR full download failed: $tag $remote_file"
+    return 1
+  fi
+
+  dest="$old_dest"
+
+  if [[ -f "$dest" ]]; then
+    local_size="$(stat -c '%s' "$dest")"
+  else
+    local_size=0
+  fi
+
+  # If the local monitored file is larger than the checkpoint, do not redownload old bytes.
+  if [[ -f "$dest" && "$local_size" -gt "$old_offset" ]]; then
+    log "WARN local file is larger than checkpoint for $tag $remote_file: checkpoint=$old_offset local=$local_size; advancing checkpoint"
+    old_offset="$local_size"
+  fi
+
+  # Remote file got smaller. Treat as truncation/rotation.
+  if (( remote_size < old_offset )); then
+    generation="$now"
+    dest="$(make_dest_path "$tag" "$host" "$remote_dir" "$remote_file" "$generation")"
+
+    log "ROTATE/TRUNCATE $tag $remote_file remote_size=$remote_size old_offset=$old_offset; new generation -> $dest"
+
+    if bytes="$(sftp_get_full "$host" "$port" "$user" "$pass" "$remote_file" "$dest")"; then
+      CP_OFFSET["$key"]="$bytes"
+      CP_LISTING["$key"]="$listing"
+      CP_DEST["$key"]="$dest"
+      CP_GEN["$key"]="$generation"
+      CP_LAST_SEEN["$key"]="$now"
+
+      save_state
+      log "OK new generation $tag $(basename "$remote_file") bytes=$bytes"
+      return 0
+    fi
+
+    log "ERROR new-generation download failed: $tag $remote_file"
+    return 1
+  fi
+
+  # No new bytes.
+  if (( remote_size == old_offset )); then
+    CP_OFFSET["$key"]="$old_offset"
+    CP_LISTING["$key"]="$listing"
+    CP_LAST_SEEN["$key"]="$now"
+
+    save_state
+    log "SKIP $tag $remote_file no new bytes size=$remote_size"
+    return 0
+  fi
+
+  # Remote file grew. Append only bytes after checkpoint.
+  if [[ ! -f "$dest" ]]; then
+    mkdir -p "$(dirname "$dest")"
+    : > "$dest"
+    chmod 0644 "$dest"
+    log "CREATE $tag $remote_file destination was missing; writing only bytes after checkpoint offset=$old_offset"
+  fi
+
+  log "REGET $tag $remote_file checkpoint_offset=$old_offset remote_size=$remote_size -> $dest"
+
+  if new_size="$(sftp_reget_from_offset_append "$host" "$port" "$user" "$pass" "$remote_file" "$old_offset" "$dest")"; then
+    CP_OFFSET["$key"]="$new_size"
+    CP_LISTING["$key"]="$listing"
+    CP_DEST["$key"]="$dest"
+    CP_GEN["$key"]="$old_gen"
+    CP_LAST_SEEN["$key"]="$now"
+
+    save_state
+
+    if (( new_size < remote_size )); then
+      log "WARN reget completed but checkpoint is still smaller than listed remote size: checkpoint=$new_size remote=$remote_size"
+    else
+      log "OK reget $tag $(basename "$remote_file") added=$((new_size - old_offset)) new_checkpoint=$new_size"
+    fi
+
+    return 0
+  fi
+
+  log "ERROR reget failed: $tag $remote_file"
+  return 1
+}
+
+load_state
+
+for cfg in "${HOST_CONFIGS[@]}"; do
+  IFS='|' read -r tag host port user pass_var dirs_csv <<< "$cfg"
+
+  pass="${!pass_var:-}"
+
+  if [[ -z "$pass" ]]; then
+    log "ERROR: password variable $pass_var is not set for $tag/$host. Skipping host."
+    continue
+  fi
+
+  IFS=',' read -r -a remote_dirs <<< "$dirs_csv"
+
+  for remote_dir in "${remote_dirs[@]}"; do
+    log "LIST $tag $host:$port $remote_dir"
+
+    list_tmp="$(mktemp "$TMP_ROOT/list.XXXXXX")"
+
+    if ! list_remote_files "$host" "$port" "$user" "$pass" "$remote_dir" > "$list_tmp"; then
+      log "ERROR: remote listing failed: $tag $host:$port $remote_dir"
+      rm -f "$list_tmp"
+      continue
+    fi
+
+    if [[ ! -s "$list_tmp" ]]; then
+      log "INFO no matching SystemOut/SystemErr logs found: $tag $remote_dir"
+    fi
+
+    while IFS=$'\t' read -r remote_file remote_size listing || [[ -n "${remote_file:-}" ]]; do
+      [[ -z "${remote_file:-}" ]] && continue
+
+      if [[ ! "$remote_size" =~ ^[0-9]+$ ]]; then
+        log "WARN bad file size from remote listing: $tag $remote_file size=$remote_size"
+        continue
+      fi
+
+      process_remote_file "$tag" "$host" "$port" "$user" "$pass" "$remote_dir" "$remote_file" "$remote_size" "$listing"
+    done < "$list_tmp"
+
+    rm -f "$list_tmp"
+  done
+done
+
+# Keep Splunk monitor tree clean and readable.
+find "$DATA_ROOT" -type d -exec chmod 0755 {} +
+find "$DATA_ROOT" -type f -name '*.log' -exec chmod 0644 {} +
+
+# Clean old temp files.
+find "$TMP_ROOT" -type f -mtime +1 -delete 2>/dev/null || true
+
+log "Done."

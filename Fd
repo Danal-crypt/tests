@@ -1,8 +1,23 @@
-[\n\r]+(?=\[\d{1,2}\/\d{1,2}\/\d{2}\s+\d{1,2}:\d{2}:\d{2}:\d{3}\s+UTC\])
+#!/bin/bash
 
-Event breaker regex:
-(?m)(?=^\[\d{1,2}/\d{1,2}/\d{2}\s+\d{1,2}:\d{2}:\d{2}:\d{3}\s+UTC\])
+USER_NAME="infobloxscp"
+LOG_FILE="/home/infobloxscp/password_expire.log"
 
-[\r\n]+(?=\[\d{1,2}\/\d{1,2}\/\d{2,4}\s+\d{1,2}:\d{2}:\d{2}:\d{3}\s+[A-Z]{2,4}\]\s+[0-9A-Fa-f]+\s+System(?:Out|Err)\b)
+expire_date=$(chage -l "$USER_NAME" | awk -F': ' '/^Password expires/ {print $2}')
 
-[\r\n]+(?=\[\d{1,2}\/\d{1,2}\/\d{2,4}\s+\d{1,2}:\d{2}:\d{2}:\d{3}\s+[A-Z]{2,4}\]\s+[0-9A-Fa-f]+\s+System(Out|Err)\b)
+if [[ -z "$expire_date" ]]; then
+  echo "password_days_until_expire=unknown" >> "$LOG_FILE"
+  exit 1
+fi
+
+if [[ "$expire_date" == "never" ]]; then
+  echo "password_days_until_expire=never" >> "$LOG_FILE"
+  exit 0
+fi
+
+expire_epoch=$(date -d "$expire_date" +%s)
+today_epoch=$(date -d "today 00:00:00" +%s)
+
+days_until_expire=$(( (expire_epoch - today_epoch) / 86400 ))
+
+echo "password_days_until_expire=$days_until_expire" >> "$LOG_FILE"
